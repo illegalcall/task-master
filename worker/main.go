@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/IBM/sarama"
@@ -41,20 +44,48 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to start Kafka consumer:", err)
 	}
+	defer func() {
+		if err := group.Close(); err != nil {
+			log.Printf("Error closing Kafka consumer group: %v", err)
+		}
+	}()
+
+	log.Println("Worker listening for jobs... 👂")
 
 	consumer := Consumer{
 		ready: make(chan bool),
 	}
 
-	ctx := context.Background()
-	topics := []string{"jobs"}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	for {
-		err := group.Consume(ctx, topics, &consumer)
-		if err != nil {
-			log.Printf("Error from consumer: %v", err)
+	// Setup signal handling
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	// Start consuming in a separate goroutine
+	topics := []string{"jobs"}
+	go func() {
+		for {
+			if err := group.Consume(ctx, topics, &consumer); err != nil {
+				log.Printf("Error from consumer: %v", err)
+			}
+			// Check if context was cancelled, indicating shutdown
+			if ctx.Err() != nil {
+				return
+			}
 		}
-	}
+	}()
+
+	// Wait for shutdown signal
+	sig := <-sigChan
+	log.Printf("Received shutdown signal: %v", sig)
+	cancel() // Trigger graceful shutdown
+	log.Println("Shutting down gracefully...")
+
+	// Give some time for in-flight messages to be processed
+	time.Sleep(time.Second * 5)
+	log.Println("Worker stopped")
 }
 
 // ✅ Setup Kafka Consumer

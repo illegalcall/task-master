@@ -4,11 +4,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/IBM/sarama"
+	"github.com/gofiber/adaptor/v2"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cache"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
+	"github.com/gofiber/fiber/v2/middleware/logger"
+	jwtware "github.com/gofiber/jwt/v3"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // Database connection
@@ -18,6 +26,29 @@ var producer sarama.SyncProducer
 func main() {
 	// Initialize Fiber app
 	app := fiber.New()
+
+	// Public routes (no JWT required)
+	app.Post("/login", login) // Add login route before JWT middleware
+
+	app.Use(limiter.New(limiter.Config{
+		Max:        100,
+		Expiration: 60 * time.Second,
+	}))
+
+	// Apply Caching (Cache responses for 10 seconds)
+	app.Use(cache.New(cache.Config{
+		Expiration:   10 * time.Second,
+		CacheControl: true,
+	}))
+
+	// Enable logging for API requests
+	app.Use(logger.New(logger.Config{
+		Format: "[${time}] ${ip} ${method} ${path} ${status}\n",
+	}))
+
+	app.Use(jwtware.New(jwtware.Config{
+		SigningKey: []byte("supersecretkey"),
+	}))
 
 	// Connect to PostgreSQL
 	var err error
@@ -40,6 +71,7 @@ func main() {
 	app.Post("/jobs", createJob)
 	app.Get("/jobs/:id", getJob)
 	app.Get("/jobs", listJobs)
+	app.Get("/metrics", adaptor.HTTPHandler(promhttp.Handler()))
 
 	// Start server
 	log.Println("Server running on port 8080 🚀")
@@ -157,4 +189,44 @@ func listJobs(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{"jobs": jobs})
+}
+
+// Login handler to generate JWT token
+func login(c *fiber.Ctx) error {
+	type LoginRequest struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+
+	var request LoginRequest
+	if err := c.BodyParser(&request); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
+	}
+
+	// For demo purposes, using simple credentials
+	// In production, you should validate against a database
+	if request.Username != "admin" || request.Password != "password" {
+		return c.Status(401).JSON(fiber.Map{"error": "Invalid credentials"})
+	}
+
+	// Create the Claims
+	claims := jwt.MapClaims{
+		"username": request.Username,
+		"admin":    true,
+		"exp":      time.Now().Add(time.Hour * 72).Unix(), // Token expires in 72 hours
+	}
+
+	// Create token
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	// Generate encoded token
+	t, err := token.SignedString([]byte("supersecretkey"))
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to generate token"})
+	}
+
+	return c.JSON(fiber.Map{
+		"token": t,
+		"type":  "Bearer",
+	})
 }
