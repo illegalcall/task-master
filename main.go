@@ -37,7 +37,7 @@ func loadEnv(key, defaultVal string) string {
 func main() {
 	// Load Configs
 	dbConn := loadEnv("DATABASE_URL", "user=admin password=admin dbname=taskmaster sslmode=disable")
-	kafkaBrokers := loadEnv("KAFKA_BROKER", "localhost:9092")
+	kafkaBrokers := loadEnv("KAFKA_BROKER", "kafka:9092")
 	secretKey := loadEnv("JWT_SECRET", "supersecretkey")
 
 	// Initialize Fiber

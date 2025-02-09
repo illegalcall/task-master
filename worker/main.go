@@ -31,16 +31,29 @@ func (consumer *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, clai
 	return nil
 }
 
+// Add loadEnv function at the top level
+func loadEnv(key, defaultVal string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+	return defaultVal
+}
+
 func main() {
+	// Load Configs
+	dbConn := loadEnv("DATABASE_URL", "user=admin password=admin dbname=taskmaster sslmode=disable")
+	kafkaBrokers := loadEnv("KAFKA_BROKER", "kafka:9092")
+	kafkaGroup := loadEnv("KAFKA_GROUP", "job-workers")
+
 	// Connect to PostgreSQL
 	var err error
-	db, err = sqlx.Connect("postgres", "user=admin password=admin dbname=taskmaster sslmode=disable")
+	db, err = sqlx.Connect("postgres", dbConn)
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
 	defer db.Close()
 
-	group, err := setupKafkaConsumer()
+	group, err := setupKafkaConsumer(kafkaBrokers, kafkaGroup)
 	if err != nil {
 		log.Fatal("Failed to start Kafka consumer:", err)
 	}
@@ -88,14 +101,13 @@ func main() {
 	log.Println("Worker stopped")
 }
 
-// ✅ Setup Kafka Consumer
-func setupKafkaConsumer() (sarama.ConsumerGroup, error) {
+// Update setupKafkaConsumer to accept parameters
+func setupKafkaConsumer(broker, group string) (sarama.ConsumerGroup, error) {
 	config := sarama.NewConfig()
 	config.Consumer.Group.Rebalance.Strategy = sarama.BalanceStrategyRoundRobin
 	config.Consumer.Offsets.Initial = sarama.OffsetOldest
 
-	brokers := []string{"localhost:9092"}
-	group := "job-workers"
+	brokers := []string{broker}
 	return sarama.NewConsumerGroup(brokers, group, config)
 }
 
