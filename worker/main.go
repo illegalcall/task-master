@@ -22,8 +22,6 @@ import (
 const (
 	// Retry configuration
 	maxRetries      = 3
-	retryBackoff    = 2 * time.Second
-	processingTime  = 10 * time.Second
 	shutdownTimeout = 5 * time.Second
 
 	// Redis configuration
@@ -33,6 +31,11 @@ const (
 	// Job statuses
 	statusFailed    = "failed"
 	statusCompleted = "completed"
+)
+
+var (
+	processingTime = 10 * time.Second
+	retryBackoff   = 2 * time.Second
 )
 
 // Global variables for PostgreSQL and Redis.
@@ -175,7 +178,7 @@ func processJob(msg *sarama.ConsumerMessage) {
 			break // Success.
 		}
 		slog.Error("Job processing failed, retrying", "jobID", job.ID, "attempt", attempt, "error", err)
-		time.Sleep(2 * time.Second) // Simple backoff.
+		time.Sleep(retryBackoff) // Use the retryBackoff variable.
 	}
 
 	redisKey := fmt.Sprintf(redisKeyTemplate, job.ID)

@@ -3,6 +3,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -12,9 +13,11 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/IBM/sarama"
+	"github.com/alicebob/miniredis/v2"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jmoiron/sqlx"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -62,12 +65,29 @@ func setupMockDB(t *testing.T) (*sqlx.DB, sqlmock.Sqlmock) {
 	return sqlxDB, mock
 }
 
+// --- Helper to initialize a test Redis client using miniredis ---
+func setupTestRedis(t *testing.T) (*miniredis.Miniredis, *redis.Client) {
+	miniRedis, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("failed to start miniredis: %v", err)
+	}
+	client := redis.NewClient(&redis.Options{
+		Addr: miniRedis.Addr(),
+	})
+	return miniRedis, client
+}
+
 // --- Test: Create Job API ---
 func TestCreateJob(t *testing.T) {
-	// Set up sqlmock as our global db
+	// Set up sqlmock as our global db.
 	mockDB, mock := setupMockDB(t)
 	db = mockDB
 	defer db.Close()
+
+	// Set up test Redis.
+	miniRedis, rClient := setupTestRedis(t)
+	defer miniRedis.Close()
+	redisClient = rClient
 
 	// Expect the INSERT query which returns an id.
 	mock.ExpectQuery(regexp.QuoteMeta("INSERT INTO jobs (name) VALUES ($1) RETURNING id")).
@@ -120,6 +140,18 @@ func TestGetJob(t *testing.T) {
 	db = mockDB
 	defer db.Close()
 
+	// Set up test Redis.
+	miniRedis, rClient := setupTestRedis(t)
+	defer miniRedis.Close()
+	redisClient = rClient
+
+	// (Optionally) Pre-populate Redis with the expected job status.
+	redisKey := "job:1" // Assuming redisKeyTemplate is "job:%d"
+	err := redisClient.Set(context.Background(), redisKey, "pending", 0).Err()
+	if err != nil {
+		t.Fatalf("failed to set initial value in Redis: %v", err)
+	}
+
 	// Expect the SELECT query for getting a job by ID.
 	mock.ExpectQuery(regexp.QuoteMeta("SELECT id, name, status FROM jobs WHERE id = $1")).
 		WithArgs("1").
@@ -155,6 +187,11 @@ func TestListJobs(t *testing.T) {
 	mockDB, mock := setupMockDB(t)
 	db = mockDB
 	defer db.Close()
+
+	// Set up test Redis.
+	miniRedis, rClient := setupTestRedis(t)
+	defer miniRedis.Close()
+	redisClient = rClient
 
 	// Expect the SELECT query for listing jobs.
 	rows := sqlmock.NewRows([]string{"id", "name", "status"}).
@@ -233,5 +270,3 @@ func TestLogin(t *testing.T) {
 	expectedExp := time.Now().Add(72 * time.Hour).Unix()
 	assert.InDelta(t, expectedExp, int64(expClaim), 5, "expiration time should be within 5 seconds of expected")
 }
-
-// --- Test: Process Job Success ---
