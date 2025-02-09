@@ -113,6 +113,8 @@ func main() {
 func setupKafkaProducer(broker string) (sarama.SyncProducer, error) {
 	config := sarama.NewConfig()
 	config.Producer.Return.Successes = true
+	config.Producer.Retry.Max = 5
+	config.Producer.Retry.Backoff = 500 * time.Millisecond
 	return sarama.NewSyncProducer([]string{broker}, config)
 }
 

@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -78,6 +80,14 @@ func main() {
 
 	// Start consuming in a separate goroutine
 	topics := []string{"jobs"}
+
+	// Add error handling goroutine
+	go func() {
+		for err := range group.Errors() {
+			slog.Error("Kafka consumer group error", "error", err)
+		}
+	}()
+
 	go func() {
 		for {
 			if err := group.Consume(ctx, topics, &consumer); err != nil {
@@ -106,7 +116,7 @@ func setupKafkaConsumer(broker, group string) (sarama.ConsumerGroup, error) {
 	config := sarama.NewConfig()
 	config.Consumer.Group.Rebalance.Strategy = sarama.BalanceStrategyRoundRobin
 	config.Consumer.Offsets.Initial = sarama.OffsetOldest
-
+	config.Consumer.Return.Errors = true // Enable error reporting
 	brokers := []string{broker}
 	return sarama.NewConsumerGroup(brokers, group, config)
 }
@@ -119,23 +129,56 @@ func processJob(msg *sarama.ConsumerMessage) {
 	}
 
 	// Parse JSON message
-	err := json.Unmarshal(msg.Value, &job)
-	if err != nil {
-		log.Println("Failed to parse job:", err)
+	if err := json.Unmarshal(msg.Value, &job); err != nil {
+		// Log error and skip processing this message
+		slog.Error("Failed to parse job", "error", err, "message", string(msg.Value))
 		return
 	}
 
-	log.Printf("Processing job %d: %s...\n", job.ID, job.Name)
+	slog.Info("Processing job", "jobID", job.ID, "jobName", job.Name)
 
-	// Simulate job processing
+	const maxRetries = 3
+	var err error
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		// Simulate job processing (or call your actual job logic here)
+		err = processJobLogic(job)
+		if err == nil {
+			break // success, exit the retry loop
+		}
+		slog.Error("Job processing failed, retrying", "jobID", job.ID, "attempt", attempt, "error", err)
+		time.Sleep(2 * time.Second) // simple backoff
+	}
+
+	if err != nil {
+		// After max retries, mark job as failed.
+		slog.Error("Job processing failed after retries", "jobID", job.ID, "error", err)
+		if _, dbErr := db.Exec("UPDATE jobs SET status = 'failed' WHERE id = $1", job.ID); dbErr != nil {
+			slog.Error("Failed to update job status to failed", "jobID", job.ID, "error", dbErr)
+		}
+		// Optionally: publish the job message to a DLQ topic here
+		return
+	}
+
+	// Update job status in the database as "completed"
+	if _, err := db.Exec("UPDATE jobs SET status = 'completed' WHERE id = $1", job.ID); err != nil {
+		slog.Error("Failed to update job status", "jobID", job.ID, "error", err)
+		return
+	}
+
+	slog.Info("Job completed successfully", "jobID", job.ID)
+}
+
+// processJobLogic simulates the processing work (replace with your actual logic)
+func processJobLogic(job struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}) error {
+	// Simulate some processing time
 	time.Sleep(3 * time.Second)
-
-	// Update job status in database
-	_, err = db.Exec("UPDATE jobs SET status = 'completed' WHERE id = $1", job.ID)
-	if err != nil {
-		log.Println("Failed to update job status:", err)
-		return
+	// Simulate random failure (for demonstration only)
+	// Remove or replace with real error checks in production.
+	if job.ID%5 == 0 {
+		return fmt.Errorf("simulated error for job %d", job.ID)
 	}
-
-	log.Printf("Job %d completed! ✅\n", job.ID)
+	return nil
 }
