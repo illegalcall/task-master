@@ -5,9 +5,9 @@ services:
     image: postgres:15
     container_name: postgres-db-dev
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: admin
-      POSTGRES_DB: taskmaster
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5432:5432"
     networks:
@@ -18,9 +18,12 @@ services:
   zookeeper:
     image: confluentinc/cp-zookeeper:latest
     container_name: zookeeper-dev
+    restart: on-failure
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_SYNC_LIMIT: 2
     networks:
       - app-network-dev
 
@@ -31,14 +34,17 @@ services:
       - zookeeper
     ports:
       - "9092:9092"
+    restart: on-failure
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_CREATE_TOPICS: "jobs:1:1"
     networks:
       - app-network-dev
 
@@ -60,14 +66,17 @@ services:
       - go-modules:/go/pkg/mod
     ports:
       - "8080:8080"
+    restart: on-failure
     environment:
-      DATABASE_URL: "postgres://admin:admin@postgres-db-dev:5432/taskmaster?sslmode=disable"
-      KAFKA_BROKER: "kafka:9092"
-      JWT_SECRET: "supersecretkey"
-      REDIS_ADDR: "redis:6379"
-      GO_ENV: "development"
+      DATABASE_URL: ${DATABASE_URL}
+      KAFKA_BROKER: ${KAFKA_BROKER}
+      REDIS_ADDR: ${REDIS_ADDR}
+      GO_ENV: ${GO_ENV}
+      JWT_SECRET: ${JWT_SECRET}
     networks:
       - app-network-dev
+    depends_on:
+      - kafka
 
   worker:
     build:
@@ -78,12 +87,15 @@ services:
       - .:/app
       - go-modules:/go/pkg/mod
     environment:
-      DATABASE_URL: "postgres://admin:admin@postgres-db-dev:5432/taskmaster?sslmode=disable"
-      KAFKA_BROKER: "kafka:9092"
-      REDIS_ADDR: "redis:6379"
-      GO_ENV: "development"
+      DATABASE_URL: ${DATABASE_URL}
+      KAFKA_BROKER: ${KAFKA_BROKER}
+      REDIS_ADDR: ${REDIS_ADDR}
+      GO_ENV: ${GO_ENV}
+    restart: on-failure
     networks:
       - app-network-dev
+    depends_on:
+      - kafka
 
 networks:
   app-network-dev:

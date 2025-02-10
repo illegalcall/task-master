@@ -11,7 +11,7 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN go build -o taskmaster-api main.go
+RUN CGO_ENABLED=0 go build -o taskmaster-api ./cmd/api
 
 # Use a minimal runtime image
 FROM gcr.io/distroless/base-debian12
