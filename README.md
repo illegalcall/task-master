@@ -1,6 +1,6 @@
 MIGRATIONS: docker exec -i taskmaster-db psql -U admin -d taskmaster < db/schema.sql
 go test ./... -v
-docker-compose -f docker-compose.dev.yml up --build
+docker compose -f docker-compose.dev.yml up --build
 
 📌 Project Roadmap: Task Master - Scalable Job Processing System
 Phase 1: Project Setup & API Development

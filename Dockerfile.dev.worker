@@ -13,4 +13,4 @@ RUN go mod download
 # Copy the rest of the source code
 COPY . .
 
-CMD ["go", "run", "worker/main.go"]
+CMD ["go", "run", "cmd/worker/main.go"]

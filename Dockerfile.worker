@@ -14,7 +14,7 @@ RUN go mod download
 COPY . .
 
 # Build the worker
-RUN go build -o taskmaster-worker worker/main.go
+RUN CGO_ENABLED=0 go build -o taskmaster-worker ./cmd/worker
 
 # Use a minimal runtime image
 FROM gcr.io/distroless/base-debian12
