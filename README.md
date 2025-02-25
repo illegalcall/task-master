@@ -9,7 +9,7 @@ A background job processing system that handles heavy or time-consuming tasks—
 docker compose -f docker-compose.dev.yml up --build
 
 # Run database migrations
-docker exec -i taskmaster-db psql -U admin -d taskmaster < db/schema.sql
+docker exec -i postgres-db psql -U admin -d taskmaster < db/schema.sql
 
 # Run tests
 go test ./... -v

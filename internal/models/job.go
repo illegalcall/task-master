@@ -14,3 +14,10 @@ const (
 	StatusFailed    = "failed"
 	StatusCompleted = "completed"
 )
+
+type Result struct {
+	Message string `json:"message"`
+	Data    interface{} `json:"data"`
+}
+
+type JobHandlerFunc func(payload []byte) (Result, error)
