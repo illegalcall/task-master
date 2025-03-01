@@ -16,6 +16,7 @@ import (
 	"github.com/illegalcall/task-master/internal/config"
 	"github.com/illegalcall/task-master/internal/models"
 	"github.com/illegalcall/task-master/pkg/database"
+	"github.com/illegalcall/task-master/internal/storage"
 )
 
 type Server struct {
@@ -23,9 +24,16 @@ type Server struct {
 	cfg      *config.Config
 	db       *database.Clients
 	producer sarama.SyncProducer
+	storage  storage.Storage
 }
 
-func NewServer(cfg *config.Config, db *database.Clients, producer sarama.SyncProducer) *Server {
+func NewServer(cfg *config.Config, db *database.Clients, producer sarama.SyncProducer) (*Server, error) {
+	// Initialize storage
+	localStorage, err := storage.NewLocalStorage(cfg.Storage.TempDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize storage: %w", err)
+	}
+
 	app := fiber.New()
 
 	// Middleware
@@ -46,12 +54,13 @@ func NewServer(cfg *config.Config, db *database.Clients, producer sarama.SyncPro
 		cfg:      cfg,
 		db:       db,
 		producer: producer,
+		storage:  localStorage,
 	}
 
 	// Routes
 	server.setupRoutes()
 
-	return server
+	return server, nil
 }
 
 func (s *Server) setupRoutes() {
@@ -67,6 +76,7 @@ func (s *Server) setupRoutes() {
 	protected.Post("/jobs", s.handleCreateJob)
 	protected.Get("/jobs/:id", s.handleGetJob)
 	protected.Get("/jobs", s.handleListJobs)
+	protected.Post("/jobs/parse-document", s.handlePDFParseJob)
 }
 
 func (s *Server) Start() error {

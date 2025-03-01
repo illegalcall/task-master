@@ -15,6 +15,7 @@ import (
 	"github.com/illegalcall/task-master/internal/config"
 	"github.com/illegalcall/task-master/internal/models"
 	"github.com/illegalcall/task-master/pkg/database"
+	"github.com/illegalcall/task-master/internal/jobs"
 )
 
 type Worker struct {
@@ -100,6 +101,7 @@ func (w *Worker) processJob(msg *sarama.ConsumerMessage) error {
 	var job struct {
 		ID   int    `json:"id"`
 		Name string `json:"name"`
+		Type string `json:"type"`
 	}
 
 	// Parse JSON message
@@ -149,14 +151,43 @@ func (w *Worker) processJob(msg *sarama.ConsumerMessage) error {
 	return nil
 }
 
-// processJobLogic simulates the actual job processing
 func (w *Worker) processJobLogic(job struct {
 	ID   int    `json:"id"`
 	Name string `json:"name"`
+	Type string `json:"type"`
 }) error {
-	time.Sleep(w.cfg.Kafka.ProcessingTime)
-	if job.ID%5 == 0 {
-		return fmt.Errorf("simulated error for job %d", job.ID)
+	ctx := context.Background()
+
+	// Get job payload from Redis
+	redisKey := fmt.Sprintf("job:%d:payload", job.ID)
+	payloadBytes, err := w.db.Redis.Get(ctx, redisKey).Bytes()
+	if err != nil {
+		return fmt.Errorf("failed to get job payload: %w", err)
 	}
-	return nil
+
+	switch job.Type {
+	case models.JobTypePDFParse:
+		// Process PDF parsing job
+		result, err := jobs.ParseDocumentHandler(ctx, payloadBytes)
+		if err != nil {
+			return fmt.Errorf("failed to process PDF: %w", err)
+		}
+
+		// Store result in Redis
+		resultKey := fmt.Sprintf("job:%d:result", job.ID)
+		resultBytes, _ := json.Marshal(result)
+		if err := w.db.Redis.Set(ctx, resultKey, resultBytes, w.cfg.Storage.TTL).Err(); err != nil {
+			return fmt.Errorf("failed to store result: %w", err)
+		}
+
+		return nil
+
+	default:
+		// For other job types, use default processing
+		time.Sleep(w.cfg.Kafka.ProcessingTime)
+		if job.ID%5 == 0 {
+			return fmt.Errorf("simulated error for job %d", job.ID)
+		}
+		return nil
+	}
 }
