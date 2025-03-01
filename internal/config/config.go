@@ -12,6 +12,7 @@ type Config struct {
 	Kafka    KafkaConfig
 	Redis    RedisConfig
 	JWT      JWTConfig
+	Storage  StorageConfig
 }
 
 type ServerConfig struct {
@@ -47,6 +48,12 @@ type JWTConfig struct {
 	Expiration time.Duration
 }
 
+type StorageConfig struct {
+	TempDir string        `env:"STORAGE_TEMP_DIR" envDefault:"/tmp/taskmaster"`
+	MaxSize int64         `env:"STORAGE_MAX_SIZE" envDefault:"10485760"` // 10MB
+	TTL     time.Duration `env:"STORAGE_TTL" envDefault:"24h"`
+}
+
 func LoadConfig() *Config {
 	return &Config{
 		Server: ServerConfig{
@@ -77,6 +84,11 @@ func LoadConfig() *Config {
 			Secret:     loadEnv("JWT_SECRET", "supersecretkey"),
 			Expiration: time.Duration(loadEnvAsInt("JWT_EXPIRATION", 72)) * time.Hour,
 		},
+		Storage: StorageConfig{
+			TempDir: loadEnv("STORAGE_TEMP_DIR", "/tmp/taskmaster"),
+			MaxSize: loadEnvAsInt64("STORAGE_MAX_SIZE", 10485760), // 10MB
+			TTL:     time.Duration(loadEnvAsInt("STORAGE_TTL", 86400)) * time.Second, // 24h
+		},
 	}
 }
 
@@ -90,6 +102,15 @@ func loadEnv(key, defaultVal string) string {
 func loadEnvAsInt(key string, defaultVal int) int {
 	if value, exists := os.LookupEnv(key); exists {
 		if intVal, err := strconv.Atoi(value); err == nil {
+			return intVal
+		}
+	}
+	return defaultVal
+}
+
+func loadEnvAsInt64(key string, defaultVal int64) int64 {
+	if value, exists := os.LookupEnv(key); exists {
+		if intVal, err := strconv.ParseInt(value, 10, 64); err == nil {
 			return intVal
 		}
 	}
