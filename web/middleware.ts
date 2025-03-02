@@ -2,10 +2,15 @@ import { NextResponse, type NextRequest } from "next/server"
 
 export async function middleware(request: NextRequest) {
   // Allow access to login page and API routes
-  if (
-    request.nextUrl.pathname === "/login" ||
-    request.nextUrl.pathname.startsWith("/api/")
-  ) {
+  if (request.nextUrl.pathname.startsWith("/api/")) {
+    return NextResponse.next()
+  }
+
+  if (request.nextUrl.pathname === "/login") {
+    const token = request.cookies.get("token")
+    if (token) {
+      return NextResponse.redirect(new URL("/", request.url))
+    }
     return NextResponse.next()
   }
 
