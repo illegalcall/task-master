@@ -33,7 +33,11 @@ func main() {
 	slog.Info("✅ Connected to Kafka")
 
 	// Create and start server
-	server := api.NewServer(cfg, db, producer)
+	server, err := api.NewServer(cfg, db, producer)
+	if err != nil {
+		slog.Error("Failed to create server", "error", err)
+		os.Exit(1)
+	}
 	if err := server.Start(); err != nil {
 		slog.Error("Server error", "error", err)
 		os.Exit(1)
