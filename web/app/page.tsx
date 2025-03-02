@@ -1,8 +1,6 @@
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 
-import { LoginForm } from "./login/page"
-
 async function checkSession() {
   const cookieStore = cookies()
   const sessionToken = cookieStore.get("sessionToken")
@@ -11,14 +9,9 @@ async function checkSession() {
 
 export default async function Home() {
   const isLoggedIn = await checkSession()
-
   if (isLoggedIn) {
     redirect("/dashboard")
+  } else {
+    redirect("/login")
   }
-
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24">
-      <LoginForm />
-    </main>
-  )
 }

@@ -1,6 +1,4 @@
-"use client"
-
-import { useState } from "react"
+import { redirect } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -8,62 +6,53 @@ import { Label } from "@/components/ui/label"
 
 import { loginUser } from "./action"
 
-export function LoginForm() {
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const onSubmit = async (event: React.FormEvent) => {
-    event.preventDefault()
-    setIsLoading(true)
-    setError(null)
-
-    try {
-      const data = await loginUser("admin", password)
-      console.log("Login successful:", data)
-    } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message)
-      } else {
-        setError("An unexpected error occurred.")
-      }
-      console.error("Login error:", err)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
+export default function LoginPage() {
   return (
-    <form onSubmit={onSubmit} className="w-[350px]">
-      <div className="grid gap-4">
-        <div className="grid gap-2">
-          <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
-            type="email"
-            placeholder="Enter your email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            disabled={isLoading}
-          />
+    <div className="flex h-screen w-full items-center justify-center">
+      <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
+        <div className="flex flex-col space-y-2 text-center">
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Welcome back
+          </h1>
+          <p className="text-muted-foreground text-sm">
+            Enter your credentials to continue
+          </p>
         </div>
-        <div className="grid gap-2">
-          <Label htmlFor="password">Password</Label>
-          <Input
-            id="password"
-            type="password"
-            placeholder="Enter your password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            disabled={isLoading}
-          />
-        </div>
-        {error && <p className="text-red-500 text-sm">{error}</p>}
-        <Button type="submit" disabled={isLoading}>
-          {isLoading ? "Loading..." : "Login"}
-        </Button>
+        <form
+          action={async (formData) => {
+            "use server"
+            const username = formData.get("username") as string
+            const password = formData.get("password") as string
+            await loginUser({ username, password })
+            redirect("/dashboard")
+          }}
+          className="w-[350px]"
+        >
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="username">Username</Label>
+              <Input
+                id="username"
+                name="username"
+                type="text"
+                placeholder="Enter your Username"
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                placeholder="Enter your password"
+                required
+              />
+            </div>
+            <Button type="submit">Login</Button>
+          </div>
+        </form>
       </div>
-    </form>
+    </div>
   )
 }

@@ -87,7 +87,7 @@ func (s *Server) handlePDFParseJob(c *fiber.Ctx) error {
 		PDFPath string `json:"pdf_path"`
 	}{
 		ParseDocumentPayload: payload,
-		PDFPath:             pdfPath,
+		PDFPath:              pdfPath,
 	}
 
 	payloadBytes, _ := json.Marshal(jobPayload)
@@ -155,7 +155,7 @@ func validatePDFParsePayload(payload *models.ParseDocumentPayload) error {
 		if err != nil {
 			return fmt.Errorf("invalid base64-encoded PDF data")
 		}
-		
+
 		// Check file size
 		if len(decoded) > maxPDFSize {
 			return fmt.Errorf("PDF size exceeds maximum allowed size of 10MB")
@@ -186,4 +186,4 @@ func validatePDFParsePayload(payload *models.ParseDocumentPayload) error {
 	}
 
 	return nil
-} 
+}
