@@ -7,12 +7,12 @@ export const siteConfig = {
   mainNav: [
     {
       title: "Jobs",
-      href: "/",
+      href: "/jobs",
     },
   ],
   links: {
-    twitter: "https://twitter.com/shadcn",
-    github: "https://github.com/shadcn/ui",
-    docs: "https://ui.shadcn.com",
+    twitter: "/",
+    github: "/",
+    docs: "/",
   },
 }
