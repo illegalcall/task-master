@@ -12,12 +12,12 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	jwtware "github.com/gofiber/jwt/v3"
-  
-  "github.com/gofiber/fiber/v2/middleware/cors"
+
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/illegalcall/task-master/internal/config"
 	"github.com/illegalcall/task-master/internal/models"
-	"github.com/illegalcall/task-master/pkg/database"
 	"github.com/illegalcall/task-master/internal/storage"
+	"github.com/illegalcall/task-master/pkg/database"
 )
 
 type Server struct {
@@ -49,14 +49,14 @@ func NewServer(cfg *config.Config, db *database.Clients, producer sarama.SyncPro
 		Expiration:   cfg.Server.CacheExpiration,
 		CacheControl: true,
 	}))
-  
-  app.Use(cors.New(cors.Config{
-        AllowOrigins:     "http://localhost:3000", 
-        AllowMethods:     "GET, POST, PUT, DELETE, PATCH, OPTIONS",
-        AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
-        ExposeHeaders:    "Content-Length, Content-Type",
-        AllowCredentials: true, 
-   }))
+
+	app.Use(cors.New(cors.Config{
+		AllowOrigins:     "http://localhost:3000",
+		AllowMethods:     "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
+		ExposeHeaders:    "Content-Length, Content-Type",
+		AllowCredentials: true,
+	}))
 
 	server := &Server{
 		app:      app,
@@ -89,116 +89,123 @@ func (s *Server) setupRoutes() {
 }
 
 func (s *Server) Start() error {
-    return s.app.Listen(s.cfg.Server.Port)
+	return s.app.Listen(s.cfg.Server.Port)
 }
 
 func (s *Server) handleCreateJob(c *fiber.Ctx) error {
-    // Parse request
-    var req struct {
-        Name string `json:"name"`
-    }
-    if err := c.BodyParser(&req); err != nil {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-            "error": "Invalid request body",
-        })
-    }
+	// Parse request
+	var req struct {
+		Name string `json:"name"`
+		Type string `json:"type"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
+	}
 
-    // Validate
-    if req.Name == "" {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-            "error": "Job name is required",
-        })
-    }
+	// Validate
+	if req.Name == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Job name is required",
+		})
+	}
 
-    // Insert job into database
-    var jobID int
-    err := s.db.DB.QueryRow(
-        "INSERT INTO jobs (name, status) VALUES ($1, $2) RETURNING id",
-        req.Name, models.StatusPending,
-    ).Scan(&jobID)
-    if err != nil {
-        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-            "error": "Failed to create job",
-        })
-    }
+	if req.Type == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Job type is required",
+		})
+	}
 
-    // Create job object
-    job := models.Job{
-        ID:     jobID,
-        Name:   req.Name,
-        Status: models.StatusPending,
-    }
+	// Insert job into database
+	var jobID int
+	err := s.db.DB.QueryRow(
+		"INSERT INTO jobs (name, status, type) VALUES ($1, $2, $3) RETURNING id",
+		req.Name, models.StatusPending, req.Type,
+	).Scan(&jobID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to create job",
+		})
+	}
 
-    // Set initial status in Redis
-    redisKey := fmt.Sprintf("job:%d", jobID)
-    if err := s.db.Redis.Set(c.Context(), redisKey, models.StatusPending, 0).Err(); err != nil {
-        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-            "error": "Failed to set job status",
-        })
-    }
+	// Create job object
+	job := models.Job{
+		ID:     jobID,
+		Name:   req.Name,
+		Status: models.StatusPending,
+		Type:   req.Type,
+	}
 
-    // Send to Kafka
-    jobBytes, _ := json.Marshal(job)
-    msg := &sarama.ProducerMessage{
-        Topic: s.cfg.Kafka.Topic,
-        Value: sarama.StringEncoder(jobBytes),
-    }
-    if _, _, err := s.producer.SendMessage(msg); err != nil {
-        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-            "error": "Failed to queue job",
-        })
-    }
+	// Set initial status in Redis
+	redisKey := fmt.Sprintf("job:%d", jobID)
+	if err := s.db.Redis.Set(c.Context(), redisKey, models.StatusPending, 0).Err(); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to set job status",
+		})
+	}
 
-    return c.JSON(fiber.Map{
-        "job": job,
-    })
+	// Send to Kafka
+	jobBytes, _ := json.Marshal(job)
+	msg := &sarama.ProducerMessage{
+		Topic: s.cfg.Kafka.Topic,
+		Value: sarama.StringEncoder(jobBytes),
+	}
+	if _, _, err := s.producer.SendMessage(msg); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to queue job",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"job": job,
+	})
 }
 
 func (s *Server) handleGetJob(c *fiber.Ctx) error {
-    jobID, err := c.ParamsInt("id")
-    if err != nil {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-            "error": "Invalid job ID",
-        })
-    }
+	jobID, err := c.ParamsInt("id")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid job ID",
+		})
+	}
 
-    var job models.Job
-    query := "SELECT id, name, status FROM jobs WHERE id = $1"
-    err = s.db.DB.Get(&job, query, jobID)
-    if err != nil {
-        return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-            "error": "Job not found",
-        })
-    }
+	var job models.Job
+	query := "SELECT id, name, status, type FROM jobs WHERE id = $1"
+	err = s.db.DB.Get(&job, query, jobID)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Job not found",
+		})
+	}
 
-    // Update status from Redis
-    redisKey := fmt.Sprintf("job:%d", job.ID)
-    if redisStatus, err := s.db.Redis.Get(c.Context(), redisKey).Result(); err == nil {
-        job.Status = redisStatus
-    }
+	// Update status from Redis
+	redisKey := fmt.Sprintf("job:%d", job.ID)
+	if redisStatus, err := s.db.Redis.Get(c.Context(), redisKey).Result(); err == nil {
+		job.Status = redisStatus
+	}
 
-    return c.JSON(fiber.Map{
-        "job": job,
-    })
+	return c.JSON(fiber.Map{
+		"job": job,
+	})
 }
 
 func (s *Server) handleListJobs(c *fiber.Ctx) error {
-    var jobs []models.Job
-    err := s.db.DB.Select(&jobs, "SELECT id, name, status FROM jobs ORDER BY created_at DESC")
-    if err != nil {
-        slog.Error("Error fetching jobs", "error", err)
-        return c.Status(500).JSON(fiber.Map{"error": "Failed to fetch jobs"})
-    }
+	var jobs []models.Job
+	err := s.db.DB.Select(&jobs, "SELECT id, name, status, type FROM jobs ORDER BY created_at DESC")
+	if err != nil {
+		slog.Error("Error fetching jobs", "error", err)
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to fetch jobs"})
+	}
 
-    // Update statuses from Redis
-    ctx := context.Background()
-    for i, job := range jobs {
-        redisKey := fmt.Sprintf("job:%d", job.ID)
-        if redisStatus, err := s.db.Redis.Get(ctx, redisKey).Result(); err == nil {
-            jobs[i].Status = redisStatus
-        }
-    }
+	// Update statuses from Redis
+	ctx := context.Background()
+	for i, job := range jobs {
+		redisKey := fmt.Sprintf("job:%d", job.ID)
+		if redisStatus, err := s.db.Redis.Get(ctx, redisKey).Result(); err == nil {
+			jobs[i].Status = redisStatus
+		}
+	}
 
-    return c.JSON(fiber.Map{"jobs": jobs})
+	return c.JSON(fiber.Map{"jobs": jobs})
 }
-
