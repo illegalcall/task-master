@@ -21,8 +21,6 @@ export async function loginUser({
 
     const data = await response.json()
 
-    console.log(data)
-
     if (!response.ok) {
       return { error: data.error || "Invalid credentials" }
     }
