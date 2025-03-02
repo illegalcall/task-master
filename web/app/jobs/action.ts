@@ -15,5 +15,8 @@ export async function fetchJobs() {
     throw new Error("Failed to fetch jobs")
   }
 
-  return response.json()
+  const resJson = await response.json()
+  const jobs = resJson.jobs
+
+  return jobs
 }
