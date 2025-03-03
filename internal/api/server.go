@@ -4,208 +4,259 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	"log/slog"
 
 	"github.com/IBM/sarama"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cache"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	jwtware "github.com/gofiber/jwt/v3"
 
-	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/illegalcall/task-master/internal/config"
 	"github.com/illegalcall/task-master/internal/models"
 	"github.com/illegalcall/task-master/internal/storage"
 	"github.com/illegalcall/task-master/pkg/database"
+
+	// Import fiber-swagger and swagger files
+
+	swagger "github.com/swaggo/fiber-swagger"
+	// _ "github.com/illegalcall/task-master/docs" // Enable if you have generated docs
+	_ "github.com/illegalcall/task-master/docs" // Import generated docs
 )
 
+// @title Task Master API
+// @version 1.0
+// @description API for managing document processing tasks and jobs
+// @host localhost:8080
+// @BasePath /api
+// @schemes http https
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and JWT token.
+
 type Server struct {
-	app      *fiber.App
-	cfg      *config.Config
-	db       *database.Clients
-	producer sarama.SyncProducer
-	storage  storage.Storage
+    app      *fiber.App
+    cfg      *config.Config
+    db       *database.Clients
+    producer sarama.SyncProducer
+    storage  storage.Storage
 }
 
 func NewServer(cfg *config.Config, db *database.Clients, producer sarama.SyncProducer) (*Server, error) {
-	// Initialize storage
-	localStorage, err := storage.NewLocalStorage(cfg.Storage.TempDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize storage: %w", err)
-	}
+    // Initialize storage
+    localStorage, err := storage.NewLocalStorage(cfg.Storage.TempDir)
+    if err != nil {
+        return nil, fmt.Errorf("failed to initialize storage: %w", err)
+    }
 
-	app := fiber.New()
+    app := fiber.New()
 
-	// Middleware
-	app.Use(logger.New(logger.Config{
-		Format: "[${time}] ${ip} ${method} ${path} ${status}\n",
-	}))
-	app.Use(limiter.New(limiter.Config{
-		Max:        cfg.Server.MaxRequests,
-		Expiration: cfg.Server.RequestTimeout,
-	}))
-	app.Use(cache.New(cache.Config{
-		Expiration:   cfg.Server.CacheExpiration,
-		CacheControl: true,
-	}))
+    // Middleware
+    app.Use(logger.New(logger.Config{
+        Format: "[${time}] ${ip} ${method} ${path} ${status}\n",
+    }))
+    app.Use(limiter.New(limiter.Config{
+        Max:        cfg.Server.MaxRequests,
+        Expiration: cfg.Server.RequestTimeout,
+    }))
+    app.Use(cache.New(cache.Config{
+        Expiration:   cfg.Server.CacheExpiration,
+        CacheControl: true,
+    }))
+    app.Use(cors.New(cors.Config{
+        AllowOrigins:     "http://localhost:3000",
+        AllowMethods:     "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+        AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
+        ExposeHeaders:    "Content-Length, Content-Type",
+        AllowCredentials: true,
+    }))
 
-	app.Use(cors.New(cors.Config{
-		AllowOrigins:     "http://localhost:3000",
-		AllowMethods:     "GET, POST, PUT, DELETE, PATCH, OPTIONS",
-		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
-		ExposeHeaders:    "Content-Length, Content-Type",
-		AllowCredentials: true,
-	}))
+    server := &Server{
+        app:      app,
+        cfg:      cfg,
+        db:       db,
+        producer: producer,
+        storage:  localStorage,
+    }
 
-	server := &Server{
-		app:      app,
-		cfg:      cfg,
-		db:       db,
-		producer: producer,
-		storage:  localStorage,
-	}
+    // Routes
+    server.setupRoutes()
 
-	// Routes
-	server.setupRoutes()
-
-	return server, nil
+    return server, nil
 }
 
 func (s *Server) setupRoutes() {
-	api := s.app.Group("/api")
+    api := s.app.Group("/api")
 
-	// Public routes
-	api.Post("/login", s.handleLogin)
+    // Public routes
+    api.Post("/login", s.handleLogin)
 
-	// Protected routes
-	protected := api.Use(jwtware.New(jwtware.Config{
-		SigningKey: []byte(s.cfg.JWT.Secret),
-	}))
-	protected.Post("/jobs", s.handleCreateJob)
-	protected.Get("/jobs/:id", s.handleGetJob)
-	protected.Get("/jobs", s.handleListJobs)
-	protected.Post("/jobs/parse-document", s.handlePDFParseJob)
+    // Protected routes
+    protected := api.Use(jwtware.New(jwtware.Config{
+        SigningKey: []byte(s.cfg.JWT.Secret),
+    }))
+    protected.Post("/jobs", s.handleCreateJob)
+    protected.Get("/jobs/:id", s.handleGetJob)
+    protected.Get("/jobs", s.handleListJobs)
+    protected.Post("/jobs/parse-document", s.handlePDFParseJob)
+
+    // Swagger documentation endpoint
+    s.app.Get("/swagger/*", swagger.WrapHandler)
 }
 
 func (s *Server) Start() error {
-	return s.app.Listen(s.cfg.Server.Port)
+    return s.app.Listen(s.cfg.Server.Port)
 }
 
+// @Summary Create a new job
+// @Description Creates a new processing job in the system
+// @Tags jobs
+// @Accept json
+// @Produce json
+// @Param job body models.Job true "Job details"
+// @Success 200 {object} models.Job
+// @Failure 400 {object} models.APIResponse
+// @Failure 500 {object} models.APIResponse
+// @Security BearerAuth
+// @Router /jobs [post]
 func (s *Server) handleCreateJob(c *fiber.Ctx) error {
-	// Parse request
-	var req struct {
-		Name string `json:"name"`
-		Type string `json:"type"`
-	}
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid request body",
-		})
-	}
+    // Parse request
+    var req struct {
+        Name string `json:"name"`
+        Type string `json:"type"`
+    }
+    if err := c.BodyParser(&req); err != nil {
+        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+            "error": "Invalid request body",
+        })
+    }
 
-	// Validate
-	if req.Name == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Job name is required",
-		})
-	}
+    // Validate
+    if req.Name == "" {
+        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+            "error": "Job name is required",
+        })
+    }
 
-	if req.Type == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Job type is required",
-		})
-	}
+    if req.Type == "" {
+        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+            "error": "Job type is required",
+        })
+    }
 
-	// Insert job into database
-	var jobID int
-	err := s.db.DB.QueryRow(
-		"INSERT INTO jobs (name, status, type) VALUES ($1, $2, $3) RETURNING id",
-		req.Name, models.StatusPending, req.Type,
-	).Scan(&jobID)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to create job",
-		})
-	}
+    // Insert job into database
+    var jobID int
+    err := s.db.DB.QueryRow(
+        "INSERT INTO jobs (name, status, type) VALUES ($1, $2, $3) RETURNING id",
+        req.Name, models.StatusPending, req.Type,
+    ).Scan(&jobID)
+    if err != nil {
+        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+            "error": "Failed to create job",
+        })
+    }
 
-	// Create job object
-	job := models.Job{
-		ID:     jobID,
-		Name:   req.Name,
-		Status: models.StatusPending,
-		Type:   req.Type,
-	}
+    // Create job object
+    job := models.Job{
+        ID:     jobID,
+        Name:   req.Name,
+        Status: models.StatusPending,
+        Type:   req.Type,
+    }
 
-	// Set initial status in Redis
-	redisKey := fmt.Sprintf("job:%d", jobID)
-	if err := s.db.Redis.Set(c.Context(), redisKey, models.StatusPending, 0).Err(); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to set job status",
-		})
-	}
+    // Set initial status in Redis
+    redisKey := fmt.Sprintf("job:%d", jobID)
+    if err := s.db.Redis.Set(c.Context(), redisKey, models.StatusPending, 0).Err(); err != nil {
+        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+            "error": "Failed to set job status",
+        })
+    }
 
-	// Send to Kafka
-	jobBytes, _ := json.Marshal(job)
-	msg := &sarama.ProducerMessage{
-		Topic: s.cfg.Kafka.Topic,
-		Value: sarama.StringEncoder(jobBytes),
-	}
-	if _, _, err := s.producer.SendMessage(msg); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to queue job",
-		})
-	}
+    // Send to Kafka
+    jobBytes, _ := json.Marshal(job)
+    msg := &sarama.ProducerMessage{
+        Topic: s.cfg.Kafka.Topic,
+        Value: sarama.StringEncoder(jobBytes),
+    }
+    if _, _, err := s.producer.SendMessage(msg); err != nil {
+        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+            "error": "Failed to queue job",
+        })
+    }
 
-	return c.JSON(fiber.Map{
-		"job": job,
-	})
+    return c.JSON(fiber.Map{
+        "job": job,
+    })
 }
 
+// @Summary Get job status
+// @Description Retrieves the current status of a job
+// @Tags jobs
+// @Accept json
+// @Produce json
+// @Param id path int true "Job ID"
+// @Success 200 {object} models.Job
+// @Failure 404 {object} models.APIResponse
+// @Failure 500 {object} models.APIResponse
+// @Security BearerAuth
+// @Router /jobs/{id} [get]
 func (s *Server) handleGetJob(c *fiber.Ctx) error {
-	jobID, err := c.ParamsInt("id")
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid job ID",
-		})
-	}
+    jobID, err := c.ParamsInt("id")
+    if err != nil {
+        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+            "error": "Invalid job ID",
+        })
+    }
 
-	var job models.Job
-	query := "SELECT id, name, status, type FROM jobs WHERE id = $1"
-	err = s.db.DB.Get(&job, query, jobID)
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "Job not found",
-		})
-	}
+    var job models.Job
+    query := "SELECT id, name, status, type FROM jobs WHERE id = $1"
+    err = s.db.DB.Get(&job, query, jobID)
+    if err != nil {
+        return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+            "error": "Job not found",
+        })
+    }
 
-	// Update status from Redis
-	redisKey := fmt.Sprintf("job:%d", job.ID)
-	if redisStatus, err := s.db.Redis.Get(c.Context(), redisKey).Result(); err == nil {
-		job.Status = redisStatus
-	}
+    // Update status from Redis
+    redisKey := fmt.Sprintf("job:%d", job.ID)
+    if redisStatus, err := s.db.Redis.Get(c.Context(), redisKey).Result(); err == nil {
+        job.Status = redisStatus
+    }
 
-	return c.JSON(fiber.Map{
-		"job": job,
-	})
+    return c.JSON(fiber.Map{
+        "job": job,
+    })
 }
 
+// @Summary List all jobs
+// @Description Retrieves a list of all jobs
+// @Tags jobs
+// @Accept json
+// @Produce json
+// @Success 200 {array} models.Job
+// @Failure 500 {object} models.APIResponse
+// @Security BearerAuth
+// @Router /jobs [get]
 func (s *Server) handleListJobs(c *fiber.Ctx) error {
-	var jobs []models.Job
-	err := s.db.DB.Select(&jobs, "SELECT id, name, status, type FROM jobs ORDER BY created_at DESC")
-	if err != nil {
-		slog.Error("Error fetching jobs", "error", err)
-		return c.Status(500).JSON(fiber.Map{"error": "Failed to fetch jobs"})
-	}
+    var jobs []models.Job
+    err := s.db.DB.Select(&jobs, "SELECT id, name, status, type FROM jobs ORDER BY created_at DESC")
+    if err != nil {
+        slog.Error("Error fetching jobs", "error", err)
+        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch jobs"})
+    }
 
-	// Update statuses from Redis
-	ctx := context.Background()
-	for i, job := range jobs {
-		redisKey := fmt.Sprintf("job:%d", job.ID)
-		if redisStatus, err := s.db.Redis.Get(ctx, redisKey).Result(); err == nil {
-			jobs[i].Status = redisStatus
-		}
-	}
+    // Update statuses from Redis
+    ctx := context.Background()
+    for i, job := range jobs {
+        redisKey := fmt.Sprintf("job:%d", job.ID)
+        if redisStatus, err := s.db.Redis.Get(ctx, redisKey).Result(); err == nil {
+            jobs[i].Status = redisStatus
+        }
+    }
 
-	return c.JSON(fiber.Map{"jobs": jobs})
+    return c.JSON(fiber.Map{"jobs": jobs})
 }

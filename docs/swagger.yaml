@@ -1,0 +1,181 @@
+basePath: /api
+definitions:
+  api.ParseDocumentPayload:
+    type: object
+  models.APIResponse:
+    properties:
+      data:
+        description: Optional data payload
+      message:
+        description: Response message
+        example: Operation completed successfully
+        type: string
+      status:
+        description: Status of the response (success/error)
+        example: success
+        type: string
+    type: object
+  models.Job:
+    description: Job contains information about a processing task
+    properties:
+      created_at:
+        description: Time when the job was created
+        type: string
+      id:
+        description: Unique identifier for the job
+        example: 1
+        type: integer
+      name:
+        description: Name of the job
+        example: PDF Parse Job
+        type: string
+      status:
+        description: Current status of the job
+        enum:
+        - pending
+        - failed
+        - completed
+        example: pending
+        type: string
+      type:
+        description: Type of job
+        example: pdf_parse
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: API for managing document processing tasks and jobs
+  title: Task Master API
+  version: "1.0"
+paths:
+  /jobs:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves a list of all jobs
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Job'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: List all jobs
+      tags:
+      - jobs
+    post:
+      consumes:
+      - application/json
+      description: Creates a new processing job in the system
+      parameters:
+      - description: Job details
+        in: body
+        name: job
+        required: true
+        schema:
+          $ref: '#/definitions/models.Job'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Job'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a new job
+      tags:
+      - jobs
+  /jobs/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves the current status of a job
+      parameters:
+      - description: Job ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Job'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Get job status
+      tags:
+      - jobs
+  /jobs/parse-document:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new job for parsing a PDF document
+      parameters:
+      - description: PDF parsing configuration
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/api.ParseDocumentPayload'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Job created successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Server error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create PDF parsing job
+      tags:
+      - pdf
+schemes:
+- http
+- https
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer" followed by a space and JWT token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

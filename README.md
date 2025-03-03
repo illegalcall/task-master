@@ -15,6 +15,9 @@ docker exec -i postgres-db psql -U admin -d taskmaster < db/schema.sql
 go test ./... -v
 ```
 
+<!-- run smtp server -->
+docker run -p 1025:1025 -p 8025:8025 mailhog/mailhog
+
 ## 📋 Implementation Progress
 
 ### 1. Core Infrastructure ✅
