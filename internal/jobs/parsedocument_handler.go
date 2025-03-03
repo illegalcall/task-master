@@ -13,11 +13,13 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/illegalcall/task-master/internal/models"
 )
 
 // Make these functions variables so they can be mocked in tests
 var (
-	ExtractPDFText = extractPDFTextImpl
+	ExtractPDFText  = extractPDFTextImpl
 	NewGeminiClient = newGeminiClientImpl
 )
 
@@ -78,7 +80,7 @@ func (c *HTTPGeminiClient) GenerateContent(ctx context.Context, text string, sch
 	if c.generateContentFunc != nil {
 		return c.generateContentFunc(ctx, text, schema, description)
 	}
-	
+
 	// Convert schema to a readable string format
 	schemaBytes, err := json.MarshalIndent(schema, "", "  ")
 	if err != nil {
@@ -155,7 +157,7 @@ Respond with ONLY a valid JSON object matching the schema. Do not include any ex
 
 	// Extract the response text
 	responseText := geminiResp.Candidates[0].Content.Parts[0].Text
-	
+
 	// Clean up response - remove any markdown code block formatting
 	cleanResponse := strings.TrimSpace(responseText)
 	cleanResponse = strings.TrimPrefix(cleanResponse, "```json")
@@ -178,12 +180,12 @@ func SimplePDFExtractor(filePath string) (string, error) {
 	// In a real implementation, you would use a PDF library here
 	// For now, we'll just return a placeholder or read the file as text
 	// to avoid external dependencies
-	
+
 	content, err := ioutil.ReadFile(filePath)
 	if err != nil {
 		return "", fmt.Errorf("failed to read file: %w", err)
 	}
-	
+
 	// For simplicity, we'll just return the first part of the file as text
 	// In a real implementation, you would parse the PDF properly
 	return fmt.Sprintf("PDF Content (simulated): %s", string(content[:min(len(content), 1000)])), nil
@@ -199,6 +201,10 @@ func min(a, b int) int {
 
 // extractPDFTextImpl extracts text content from a PDF document
 func extractPDFTextImpl(documentSource string, documentType string, maxPages int) (string, error) {
+	fmt.Println("documentSource", documentSource)
+	fmt.Println("documentType", documentType)
+	fmt.Println("maxPages", maxPages)
+
 	switch documentType {
 	case "path":
 		// For simplicity, we'll just use our simple extractor
@@ -211,6 +217,10 @@ func extractPDFTextImpl(documentSource string, documentType string, maxPages int
 			return "", fmt.Errorf("failed to download file: %w", err)
 		}
 		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return "", fmt.Errorf("failed to download file: HTTP status %d", resp.StatusCode)
+		}
 
 		tempFile, err := ioutil.TempFile("", "pdf-*.pdf")
 		if err != nil {
@@ -286,7 +296,7 @@ func ParseDocumentWithTracking(ctx context.Context, payload []byte) (Result, err
 	}
 
 	tracker := GetParsingTracker()
-	
+
 	// Update status to uploaded if this is the first time
 	tracker.UpdateStatus(documentID, StatusUploaded, nil)
 
@@ -307,17 +317,17 @@ func ParseDocumentWithTracking(ctx context.Context, payload []byte) (Result, err
 	maxAttempts := tracker.config.MaxRetries + 1 // +1 for the initial attempt
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		start := time.Now()
-		
+
 		// If this is a retry attempt, update status to retrying
 		if attempt > 1 {
 			tracker.UpdateStatus(documentID, StatusRetrying, nil)
 			// Add a small delay before retrying to prevent hammering the system
 			time.Sleep(time.Millisecond * 100)
 		}
-		
+
 		// Update status to parsing
 		tracker.UpdateStatus(documentID, StatusParsing, nil)
-		
+
 		// Extract and validate the document
 		var parsedPayload ParseDocumentPayload
 		if err := json.Unmarshal(payload, &parsedPayload); err != nil {
@@ -367,7 +377,7 @@ func ParseDocumentWithTracking(ctx context.Context, payload []byte) (Result, err
 
 		// Calculate processing time
 		elapsedTime := time.Since(start)
-		
+
 		// Update metrics
 		parsedDocument := ParsedDocument{
 			Content: parsedContent,
@@ -390,7 +400,7 @@ func ParseDocumentWithTracking(ctx context.Context, payload []byte) (Result, err
 
 		// Update status to complete
 		tracker.UpdateStatus(documentID, StatusComplete, nil)
-		
+
 		// Success, exit the retry loop
 		finalErr = nil
 		break
@@ -403,42 +413,108 @@ func ParseDocumentWithTracking(ctx context.Context, payload []byte) (Result, err
 	return result, nil
 }
 
+// transformPayload converts from models.ParseDocumentPayload to jobs.ParseDocumentPayload
+func transformPayload(payload []byte) ([]byte, error) {
+	var modelPayload struct {
+		models.ParseDocumentPayload
+		PDFPath string `json:"pdf_path"`
+	}
+
+	if err := json.Unmarshal(payload, &modelPayload); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal model payload: %w", err)
+	}
+
+	// Determine document type based on PDF source
+	var documentType string
+	var documentSource string
+	if strings.HasPrefix(modelPayload.PDFSource, "http://") || strings.HasPrefix(modelPayload.PDFSource, "https://") {
+		documentType = "url"
+		documentSource = modelPayload.PDFSource
+	} else if modelPayload.PDFPath != "" {
+		documentType = "path"
+		documentSource = modelPayload.PDFPath
+	} else {
+		documentType = "base64"
+		documentSource = modelPayload.PDFSource
+	}
+
+	// Create the jobs payload
+	jobPayload := ParseDocumentPayload{
+		Document:     documentSource,
+		DocumentType: documentType,
+		OutputSchema: make(map[string]interface{}),
+		Description:  modelPayload.Description,
+		Options: ParseOptions{
+			Language: modelPayload.Options.Language,
+		},
+	}
+
+	// Convert ExpectedSchema to OutputSchema
+	if err := json.Unmarshal(modelPayload.ExpectedSchema, &jobPayload.OutputSchema); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal expected schema: %w", err)
+	}
+
+	// Marshal the transformed payload
+	transformedPayload, err := json.Marshal(jobPayload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal transformed payload: %w", err)
+	}
+
+	return transformedPayload, nil
+}
+
 // ParseDocumentHandler handles document parsing jobs
 func ParseDocumentHandler(ctx context.Context, payload []byte) (Result, error) {
+	fmt.Println("Received payload:", string(payload))
+
+	// Transform the payload from models format to jobs format
+	transformedPayload, err := transformPayload(payload)
+	if err != nil {
+		fmt.Printf("Failed to transform payload: %v\n", err)
+		return Result{}, fmt.Errorf("failed to transform payload: %w", err)
+	}
+
+	fmt.Println("Transformed payload:", string(transformedPayload))
+
 	// Extract document ID or generate one if not present
 	var docIDContainer struct {
 		DocumentID string `json:"documentID"`
 	}
-	
-	if err := json.Unmarshal(payload, &docIDContainer); err != nil {
+
+	if err := json.Unmarshal(transformedPayload, &docIDContainer); err != nil {
+		fmt.Printf("Failed to unmarshal document ID: %v\n", err)
 		// If we can't extract a document ID, we'll just use the regular parsing flow
 		// without tracking
-		return simpleParseDocument(ctx, payload)
+		return simpleParseDocument(ctx, transformedPayload)
 	}
-	
+
 	documentID := docIDContainer.DocumentID
 	if documentID == "" {
 		// If no document ID is provided, generate a random one for tracking
 		documentID = fmt.Sprintf("doc-%s", time.Now().Format("20060102-150405-999999"))
-		
+		fmt.Printf("Generated document ID: %s\n", documentID)
+
 		// Add the document ID to the payload
 		var parsedPayload map[string]interface{}
-		if err := json.Unmarshal(payload, &parsedPayload); err != nil {
-			return simpleParseDocument(ctx, payload)
+		if err := json.Unmarshal(transformedPayload, &parsedPayload); err != nil {
+			fmt.Printf("Failed to unmarshal payload for document ID: %v\n", err)
+			return simpleParseDocument(ctx, transformedPayload)
 		}
 		parsedPayload["documentID"] = documentID
-		
+
 		// Reconstruct the payload with the document ID
 		updatedPayload, err := json.Marshal(parsedPayload)
 		if err != nil {
-			return simpleParseDocument(ctx, payload)
+			fmt.Printf("Failed to marshal updated payload: %v\n", err)
+			return simpleParseDocument(ctx, transformedPayload)
 		}
-		
-		payload = updatedPayload
+
+		transformedPayload = updatedPayload
+		fmt.Println("Updated payload with document ID:", string(transformedPayload))
 	}
-	
+
 	// Use the tracking system for parsing
-	return ParseDocumentWithTracking(ctx, payload)
+	return ParseDocumentWithTracking(ctx, transformedPayload)
 }
 
 // simpleParseDocument implements the original document parsing logic without tracking
@@ -504,4 +580,4 @@ func simpleParseDocument(ctx context.Context, payload []byte) (Result, error) {
 	}
 
 	return result, nil
-} 
+}

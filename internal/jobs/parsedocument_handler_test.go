@@ -6,6 +6,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // MockGeminiClient is a mock implementation of the GeminiClient interface for testing
@@ -60,7 +62,7 @@ func TestParseDocumentHandler(t *testing.T) {
 			}
 		]
 	}`)
-	
+
 	mockClient := &MockGeminiClient{
 		MockResponse: mockResponse,
 		MockError:    nil,
@@ -253,4 +255,143 @@ func TestParseDocumentHandlerIntegration(t *testing.T) {
 	if parsedDoc.Content == nil {
 		t.Errorf("Parsed content is nil")
 	}
-} 
+}
+
+func TestTransformPayload(t *testing.T) {
+	testCases := []struct {
+		name           string
+		input          map[string]interface{}
+		expectedOutput map[string]interface{}
+		expectError    bool
+	}{
+		{
+			name: "URL source",
+			input: map[string]interface{}{
+				"pdf_source": "https://example.com/test.pdf",
+				"expected_schema": json.RawMessage(`{
+					"type": "object",
+					"properties": {
+						"field1": {"type": "string"}
+					}
+				}`),
+				"description": "Test document",
+				"options": map[string]interface{}{
+					"language": "en",
+				},
+			},
+			expectedOutput: map[string]interface{}{
+				"document":     "",
+				"documentType": "url",
+				"outputSchema": map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"field1": map[string]interface{}{"type": "string"},
+					},
+				},
+				"description": "Test document",
+				"options": map[string]interface{}{
+					"language": "en",
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "Path source",
+			input: map[string]interface{}{
+				"pdf_source": "/path/to/test.pdf",
+				"pdf_path":   "/tmp/test.pdf",
+				"expected_schema": json.RawMessage(`{
+					"type": "object",
+					"properties": {
+						"field1": {"type": "string"}
+					}
+				}`),
+				"description": "Test document",
+				"options": map[string]interface{}{
+					"language": "en",
+				},
+			},
+			expectedOutput: map[string]interface{}{
+				"document":     "/tmp/test.pdf",
+				"documentType": "path",
+				"outputSchema": map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"field1": map[string]interface{}{"type": "string"},
+					},
+				},
+				"description": "Test document",
+				"options": map[string]interface{}{
+					"language": "en",
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "Base64 source",
+			input: map[string]interface{}{
+				"pdf_source": "base64encodedcontent",
+				"expected_schema": json.RawMessage(`{
+					"type": "object",
+					"properties": {
+						"field1": {"type": "string"}
+					}
+				}`),
+				"description": "Test document",
+				"options": map[string]interface{}{
+					"language": "en",
+				},
+			},
+			expectedOutput: map[string]interface{}{
+				"document":     "",
+				"documentType": "base64",
+				"outputSchema": map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"field1": map[string]interface{}{"type": "string"},
+					},
+				},
+				"description": "Test document",
+				"options": map[string]interface{}{
+					"language": "en",
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "Invalid JSON schema",
+			input: map[string]interface{}{
+				"pdf_source":      "https://example.com/test.pdf",
+				"expected_schema": json.RawMessage(`{invalid json}`),
+				"description":     "Test document",
+			},
+			expectError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Marshal input
+			inputBytes, err := json.Marshal(tc.input)
+			if err != nil {
+				t.Fatalf("Failed to marshal input: %v", err)
+			}
+
+			// Transform payload
+			outputBytes, err := transformPayload(inputBytes)
+			if tc.expectError {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+
+			// Unmarshal output
+			var output map[string]interface{}
+			err = json.Unmarshal(outputBytes, &output)
+			assert.NoError(t, err)
+
+			// Compare with expected output
+			assert.Equal(t, tc.expectedOutput, output)
+		})
+	}
+}
