@@ -26,6 +26,7 @@ type Server struct {
 	db       *database.Clients
 	producer sarama.SyncProducer
 	storage  storage.Storage
+	logger   *slog.Logger
 }
 
 func NewServer(cfg *config.Config, db *database.Clients, producer sarama.SyncProducer) (*Server, error) {
@@ -64,6 +65,7 @@ func NewServer(cfg *config.Config, db *database.Clients, producer sarama.SyncPro
 		db:       db,
 		producer: producer,
 		storage:  localStorage,
+		logger:   slog.Default(),
 	}
 
 	// Routes
