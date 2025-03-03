@@ -12,6 +12,14 @@ export async function createJob({
   expectedSchema: string
 }) {
   try {
+    const payload = JSON.stringify({
+      name: jobName,
+      pdf_source: pdfSource,
+      expected_schema: expectedSchema,
+    })
+
+    console.log("payload", payload)
+
     const response = await fetch(
       `${process.env.API_URL}/api/jobs/parse-document`,
       {
@@ -19,7 +27,7 @@ export async function createJob({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ jobName, pdfSource, expectedSchema }),
+        body: payload,
       }
     )
 
@@ -36,6 +44,7 @@ export async function createJob({
       path: "/",
     })
   } catch (error) {
+    console.error("error", error)
     return { error: "An unexpected error occurred" }
   }
 }
