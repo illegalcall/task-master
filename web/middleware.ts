@@ -1,5 +1,22 @@
 import { NextResponse, type NextRequest } from "next/server"
 
+export const verifyToken = async (token: string) => {
+  try {
+    const response = await fetch(`${process.env.API_URL}/api/jobs`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+
+    if (response.status === 401) {
+      return false
+    }
+    return true
+  } catch (error) {
+    return false
+  }
+}
+
 export async function middleware(request: NextRequest) {
   // Allow access to login page and API routes
   if (request.nextUrl.pathname.startsWith("/api/")) {
@@ -9,37 +26,27 @@ export async function middleware(request: NextRequest) {
   if (request.nextUrl.pathname === "/login") {
     const token = request.cookies.get("token")
     if (token) {
-      return NextResponse.redirect(new URL("/", request.url))
+      const isVerified = await verifyToken(token.value)
+      if (isVerified) {
+        return NextResponse.redirect(new URL("/", request.url))
+      }
     }
     return NextResponse.next()
   }
 
   const token = request.cookies.get("token")
 
-  // If no token is present, redirect to login
   if (!token) {
     return NextResponse.redirect(new URL("/login", request.url))
   }
 
-  try {
-    // Verify token by making a request to /api/jobs
-    const response = await fetch(`${process.env.API_URL}/api/jobs`, {
-      headers: {
-        Authorization: `Bearer ${token.value}`,
-      },
-    })
-
-    // If unauthorized, redirect to login
-    if (response.status === 401) {
-      return NextResponse.redirect(new URL("/login", request.url))
-    }
-
-    // If authorized, allow access
-    return NextResponse.next()
-  } catch (error) {
-    // In case of any error, redirect to login
+  const isVerified = await verifyToken(token.value)
+  console.log("isVerified", isVerified)
+  if (!isVerified) {
     return NextResponse.redirect(new URL("/login", request.url))
   }
+
+  return NextResponse.next()
 }
 
 // Configure which routes to run middleware on

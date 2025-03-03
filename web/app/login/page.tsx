@@ -24,7 +24,7 @@ export default function LoginPage() {
             const username = formData.get("username") as string
             const password = formData.get("password") as string
             await loginUser({ username, password })
-            redirect("/dashboard")
+            redirect("/")
           }}
           className="w-[350px]"
         >
