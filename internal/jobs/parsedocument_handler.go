@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -62,7 +63,8 @@ type GeminiCandidate struct {
 
 // newGeminiClientImpl creates a new Gemini client using the API key from environment variables
 func newGeminiClientImpl(ctx context.Context) (*HTTPGeminiClient, error) {
-	apiKey := os.Getenv("GEMINI_API_KEY")
+	apiKey := "AIzaSyD00N4RJfHBSqo1fLfzgKtGnl7NZ-Oy1Os"
+	slog.Info("GEMINI_API_KEY", "apiKey", apiKey)
 	if apiKey == "" {
 		return nil, errors.New("GEMINI_API_KEY environment variable is not set")
 	}
@@ -199,60 +201,95 @@ func min(a, b int) int {
 
 // extractPDFTextImpl extracts text content from a PDF document
 func extractPDFTextImpl(documentSource string, documentType string, maxPages int) (string, error) {
+	slog.Info("Starting PDF text extraction", "documentType", documentType, "documentSource", documentSource)
 	switch documentType {
 	case "path":
-		// For simplicity, we'll just use our simple extractor
-		return SimplePDFExtractor(documentSource)
+		slog.Info("Using simple extractor for local file path", "documentSource", documentSource)
+		text, err := SimplePDFExtractor(documentSource)
+		if err != nil {
+			slog.Info("SimplePDFExtractor failed for local file", "documentSource", documentSource, "error", err)
+		} else {
+			slog.Info("SimplePDFExtractor succeeded for local file", "documentSource", documentSource)
+		}
+		return text, err
 
 	case "url":
-		// Download the file to a temporary location
+		slog.Info("Downloading PDF from URL", "documentSource", documentSource)
 		resp, err := http.Get(documentSource)
 		if err != nil {
+			slog.Info("Failed to download file", "documentSource", documentSource, "error", err)
 			return "", fmt.Errorf("failed to download file: %w", err)
 		}
 		defer resp.Body.Close()
+		slog.Info("File downloaded successfully", "documentSource", documentSource)
 
 		tempFile, err := ioutil.TempFile("", "pdf-*.pdf")
 		if err != nil {
+			slog.Info("Failed to create temporary file for URL download", "error", err)
 			return "", fmt.Errorf("failed to create temp file: %w", err)
 		}
+		slog.Info("Temporary file created", "tempFile", tempFile.Name())
 		defer os.Remove(tempFile.Name())
 		defer tempFile.Close()
 
 		_, err = io.Copy(tempFile, resp.Body)
 		if err != nil {
+			slog.Info("Failed to write downloaded content to temporary file", "tempFile", tempFile.Name(), "error", err)
 			return "", fmt.Errorf("failed to write downloaded content: %w", err)
 		}
-		tempFile.Close() // Close to flush writes
+		slog.Info("Downloaded content written to temporary file", "tempFile", tempFile.Name())
 
-		return SimplePDFExtractor(tempFile.Name())
+		tempFile.Close() // Close to flush writes
+		slog.Info("Temporary file closed", "tempFile", tempFile.Name())
+
+		text, err := SimplePDFExtractor(tempFile.Name())
+		if err != nil {
+			slog.Info("SimplePDFExtractor failed for file downloaded from URL", "tempFile", tempFile.Name(), "error", err)
+		} else {
+			slog.Info("SimplePDFExtractor succeeded for file downloaded from URL", "tempFile", tempFile.Name())
+		}
+		return text, err
 
 	case "base64":
-		// Decode base64 content
+		slog.Info("Decoding base64 PDF content")
 		decoded, err := base64.StdEncoding.DecodeString(documentSource)
 		if err != nil {
+			slog.Info("Failed to decode base64 content", "error", err)
 			return "", fmt.Errorf("failed to decode base64: %w", err)
 		}
+		slog.Info("Base64 content decoded successfully")
 
-		// Save to temporary file
 		tempFile, err := ioutil.TempFile("", "pdf-*.pdf")
 		if err != nil {
+			slog.Info("Failed to create temporary file for base64 content", "error", err)
 			return "", fmt.Errorf("failed to create temp file: %w", err)
 		}
+		slog.Info("Temporary file created for base64 content", "tempFile", tempFile.Name())
 		defer os.Remove(tempFile.Name())
 		defer tempFile.Close()
 
 		if _, err := tempFile.Write(decoded); err != nil {
+			slog.Info("Failed to write decoded base64 content to temporary file", "tempFile", tempFile.Name(), "error", err)
 			return "", fmt.Errorf("failed to write to temp file: %w", err)
 		}
+		slog.Info("Decoded base64 content written to temporary file", "tempFile", tempFile.Name())
 		tempFile.Close() // Close to flush writes
+		slog.Info("Temporary file closed", "tempFile", tempFile.Name())
 
-		return SimplePDFExtractor(tempFile.Name())
+		text, err := SimplePDFExtractor(tempFile.Name())
+		if err != nil {
+			slog.Info("SimplePDFExtractor failed for file created from base64", "tempFile", tempFile.Name(), "error", err)
+		} else {
+			slog.Info("SimplePDFExtractor succeeded for file created from base64", "tempFile", tempFile.Name())
+		}
+		return text, err
 
 	default:
+		slog.Info("Unsupported document type encountered", "documentType", documentType)
 		return "", fmt.Errorf("unsupported document type: %s", documentType)
 	}
 }
+
 
 // Global tracker instance
 var globalTracker *ParsingTracker
@@ -272,30 +309,44 @@ func GetParsingTracker() *ParsingTracker {
 
 // ParseDocumentWithTracking handles document parsing jobs with status tracking and retries
 func ParseDocumentWithTracking(ctx context.Context, payload []byte) (Result, error) {
+	slog.Info("ParseDocumentWithTracking started", "payload", string(payload))
 	// Parse the payload to get the document ID
 	var parsedPayload struct {
 		DocumentID string `json:"documentID"`
+		DocumentType string `json:"documentType"`
+		DocumentSource string `json:"documentSource"`
+		ExpectedSchema string `json:"expected_schema"`
+		Description string `json:"description"`
 	}
 	if err := json.Unmarshal(payload, &parsedPayload); err != nil {
+		slog.Info("Failed to extract documentID from payload", "error", err)
 		return Result{}, fmt.Errorf("failed to extract document ID: %w", err)
 	}
 
 	documentID := parsedPayload.DocumentID
+	documentType := parsedPayload.DocumentType
+	documentSource := parsedPayload.DocumentSource
+	expectedSchema := parsedPayload.ExpectedSchema
+	description := parsedPayload.Description
 	if documentID == "" {
-		return Result{}, errors.New("documentID is required")
+		slog.Info("documentID is missing in payload")
+		return Result{}, fmt.Errorf("documentID is required")
 	}
+	slog.Info("DocumentID extracted", "documentID", documentID)
 
 	tracker := GetParsingTracker()
+	slog.Info("Parsing tracker obtained", "documentID", documentID)
 	
 	// Update status to uploaded if this is the first time
 	tracker.UpdateStatus(documentID, StatusUploaded, nil)
+	slog.Info("Tracker status updated to 'uploaded'", "documentID", documentID)
 
-	// Function to handle any panics by updating status
+	// Handle any panics by updating status before re-panicking
 	defer func() {
 		if r := recover(); r != nil {
 			err := fmt.Errorf("panic recovered: %v", r)
 			tracker.UpdateStatus(documentID, StatusFailed, err)
-			// Re-panic so it can be handled by higher-level recovery mechanisms
+			slog.Info("Panic recovered, tracker status updated to 'failed'", "documentID", documentID, "error", err)
 			panic(r)
 		}
 	}()
@@ -305,46 +356,60 @@ func ParseDocumentWithTracking(ctx context.Context, payload []byte) (Result, err
 
 	// Retry loop
 	maxAttempts := tracker.config.MaxRetries + 1 // +1 for the initial attempt
+	slog.Info("Starting retry loop", "maxAttempts", maxAttempts, "documentID", documentID)
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		start := time.Now()
+		slog.Info("Retry attempt started", "attempt", attempt, "documentID", documentID)
 		
-		// If this is a retry attempt, update status to retrying
+		// If this is a retry attempt, update status to retrying and delay briefly
 		if attempt > 1 {
 			tracker.UpdateStatus(documentID, StatusRetrying, nil)
-			// Add a small delay before retrying to prevent hammering the system
+			slog.Info("Tracker status updated to 'retrying'", "documentID", documentID, "attempt", attempt)
 			time.Sleep(time.Millisecond * 100)
 		}
 		
 		// Update status to parsing
 		tracker.UpdateStatus(documentID, StatusParsing, nil)
+		slog.Info("Tracker status updated to 'parsing'", "documentID", documentID, "attempt", attempt)
 		
 		// Extract and validate the document
 		var parsedPayload ParseDocumentPayload
 		if err := json.Unmarshal(payload, &parsedPayload); err != nil {
 			finalErr = fmt.Errorf("failed to unmarshal payload: %w", err)
 			tracker.UpdateStatus(documentID, StatusFailed, finalErr)
+			slog.Info("Failed to unmarshal payload during parsing", "documentID", documentID, "attempt", attempt, "error", finalErr)
 			continue // Try again if retries are available
 		}
+		slog.Info("Payload unmarshalled successfully for parsing", "parsedPayload", parsedPayload)
 
 		// Extract text from the PDF
 		tracker.UpdateStatus(documentID, StatusParsing, nil)
+		slog.Info("Tracker status updated to 'parsing' for text extraction", "documentID", documentID, "attempt", attempt)
 		maxPages := parsedPayload.Options.MaxPages
-		text, err := ExtractPDFText(parsedPayload.Document, parsedPayload.DocumentType, maxPages)
+		text, err := ExtractPDFText(documentSource, documentType, maxPages)
 		if err != nil {
 			finalErr = fmt.Errorf("text extraction error: %w", err)
 			tracker.UpdateStatus(documentID, StatusFailed, finalErr)
+			slog.Info("Text extraction failed", "documentID", documentID, "attempt", attempt, "error", finalErr)
 			continue // Try again if retries are available
 		}
+		slog.Info("Text extraction succeeded", "documentID", documentID, "attempt", attempt, "extractedTextLen", len(text))
 
 		// Process with LLM
 		tracker.UpdateStatus(documentID, StatusConverting, nil)
+		slog.Info("Tracker status updated to 'converting'", "documentID", documentID, "attempt", attempt)
 		geminiClient, err := NewGeminiClient(ctx)
 		if err != nil {
 			finalErr = fmt.Errorf("failed to initialize Gemini client: %w", err)
 			tracker.UpdateStatus(documentID, StatusFailed, finalErr)
+			slog.Info("Failed to initialize Gemini client", "documentID", documentID, "attempt", attempt, "error", finalErr)
 			continue // Try again if retries are available
 		}
-
+		slog.Info("Gemini client initialized", "documentID", documentID, "attempt", attempt)
+		//log the text,outputSchema,description
+		slog.Info("Text", "text", text)
+		slog.Info("OutputSchema", "outputSchema", expectedSchema)
+		slog.Info("Description", "description", description)
 		structuredData, err := geminiClient.GenerateContent(
 			ctx,
 			text,
@@ -354,21 +419,26 @@ func ParseDocumentWithTracking(ctx context.Context, payload []byte) (Result, err
 		if err != nil {
 			finalErr = fmt.Errorf("LLM processing error: %w", err)
 			tracker.UpdateStatus(documentID, StatusFailed, finalErr)
+			slog.Info("LLM processing failed", "documentID", documentID, "attempt", attempt, "error", finalErr)
 			continue // Try again if retries are available
 		}
+		slog.Info("LLM processing succeeded", "documentID", documentID, "attempt", attempt)
 
 		// Parse the structured data into our response format
 		var parsedContent interface{}
 		if err := json.Unmarshal(structuredData, &parsedContent); err != nil {
 			finalErr = fmt.Errorf("failed to parse LLM response: %w", err)
 			tracker.UpdateStatus(documentID, StatusFailed, finalErr)
+			slog.Info("Failed to parse LLM response", "documentID", documentID, "attempt", attempt, "error", finalErr)
 			continue // Try again if retries are available
 		}
+		slog.Info("LLM response parsed successfully", "documentID", documentID, "attempt", attempt)
 
 		// Calculate processing time
 		elapsedTime := time.Since(start)
+		slog.Info("Processing time calculated", "documentID", documentID, "attempt", attempt, "elapsedTimeMs", elapsedTime.Milliseconds())
 		
-		// Update metrics
+		// Update metrics and construct the parsed document
 		parsedDocument := ParsedDocument{
 			Content: parsedContent,
 			MetaInfo: map[string]interface{}{
@@ -378,6 +448,7 @@ func ParseDocumentWithTracking(ctx context.Context, payload []byte) (Result, err
 				"attempts":         attempt,
 			},
 		}
+		slog.Info("Parsed document metrics collected", "documentID", documentID, "attempt", attempt, "metaInfo", parsedDocument.MetaInfo)
 
 		result = Result{
 			Data: parsedDocument,
@@ -387,9 +458,11 @@ func ParseDocumentWithTracking(ctx context.Context, payload []byte) (Result, err
 				"documentID":  documentID,
 			},
 		}
+		slog.Info("Result constructed successfully", "documentID", documentID, "attempt", attempt)
 
 		// Update status to complete
 		tracker.UpdateStatus(documentID, StatusComplete, nil)
+		slog.Info("Tracker status updated to 'complete'", "documentID", documentID, "attempt", attempt)
 		
 		// Success, exit the retry loop
 		finalErr = nil
@@ -397,48 +470,70 @@ func ParseDocumentWithTracking(ctx context.Context, payload []byte) (Result, err
 	}
 
 	if finalErr != nil {
+		slog.Info("Final error after retries", "documentID", documentID, "error", finalErr)
 		return Result{}, finalErr
 	}
 
+	slog.Info("ParseDocumentWithTracking completed successfully", "documentID", documentID)
 	return result, nil
 }
 
+
 // ParseDocumentHandler handles document parsing jobs
 func ParseDocumentHandler(ctx context.Context, payload []byte) (Result, error) {
-	// Extract document ID or generate one if not present
+	slog.Info("ParseDocumentHandler invoked", "payload", string(payload))
+	
+	// Attempt to extract document ID from payload
 	var docIDContainer struct {
 		DocumentID string `json:"documentID"`
 	}
-	
 	if err := json.Unmarshal(payload, &docIDContainer); err != nil {
-		// If we can't extract a document ID, we'll just use the regular parsing flow
-		// without tracking
+		slog.Error("Failed to unmarshal payload for documentID extraction", "error", err)
+		slog.Info("Falling back to simpleParseDocument due to unmarshalling error")
 		return simpleParseDocument(ctx, payload)
 	}
+	slog.Info("Extracted documentID container", "documentID", docIDContainer.DocumentID)
 	
 	documentID := docIDContainer.DocumentID
 	if documentID == "" {
-		// If no document ID is provided, generate a random one for tracking
+		slog.Info("No documentID found in payload, generating a new one")
 		documentID = fmt.Sprintf("doc-%s", time.Now().Format("20060102-150405-999999"))
+		slog.Info("Generated documentID", "documentID", documentID)
 		
-		// Add the document ID to the payload
+		// Add the generated documentID to the payload
 		var parsedPayload map[string]interface{}
 		if err := json.Unmarshal(payload, &parsedPayload); err != nil {
+			slog.Error("Failed to unmarshal payload into map for documentID insertion", "error", err)
+			slog.Info("Falling back to simpleParseDocument due to unmarshalling error on map")
 			return simpleParseDocument(ctx, payload)
 		}
 		parsedPayload["documentID"] = documentID
+		parsedPayload["documentType"] = "url"
+		parsedPayload["documentSource"]=parsedPayload["pdf_source"]
+		slog.Info("Inserted documentID into payload map", "documentID", documentID, "payloadMap", parsedPayload,"documentType", parsedPayload["documentType"],"documentSource", parsedPayload["documentSource"])
 		
-		// Reconstruct the payload with the document ID
+		// Reconstruct the payload with the documentID included
 		updatedPayload, err := json.Marshal(parsedPayload)
 		if err != nil {
+			slog.Error("Failed to marshal updated payload with documentID", "error", err)
+			slog.Info("Falling back to simpleParseDocument due to marshalling error")
 			return simpleParseDocument(ctx, payload)
 		}
-		
+		slog.Info("Reconstructed payload with documentID", "updatedPayload", string(updatedPayload))
 		payload = updatedPayload
+	} else {
+		slog.Info("DocumentID found in payload", "documentID", documentID)
 	}
-	
-	// Use the tracking system for parsing
-	return ParseDocumentWithTracking(ctx, payload)
+
+	// Proceed with tracking system for parsing
+	slog.Info("Invoking ParseDocumentWithTracking", "documentID", documentID)
+	result, err := ParseDocumentWithTracking(ctx, payload)
+	if err != nil {
+		slog.Error("ParseDocumentWithTracking failed", "documentID", documentID, "error", err)
+	} else {
+		slog.Info("ParseDocumentWithTracking succeeded", "documentID", documentID)
+	}
+	return result, err
 }
 
 // simpleParseDocument implements the original document parsing logic without tracking
