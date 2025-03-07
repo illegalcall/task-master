@@ -69,7 +69,7 @@ type ParsingTrackerConfig struct {
 // DefaultParsingTrackerConfig returns a default configuration
 func DefaultParsingTrackerConfig() ParsingTrackerConfig {
 	return ParsingTrackerConfig{
-		MaxRetries:     1,
+		MaxRetries:     3,
 		WebhookEnabled: false,
 	}
 }

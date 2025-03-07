@@ -21,7 +21,7 @@ import (
 )
 
 
-const llamaCloudAPIKey = "llx-iDCWJDiutwoh6GlXXlDMBGMc8Pj71Zb62ziMbZGRr2yqpLK2"
+var llamaCloudAPIKey = os.Getenv("LLAMA_API_KEY")
 
 // Make these functions variables so they can be mocked in tests
 var (
@@ -71,7 +71,7 @@ type GeminiCandidate struct {
 
 // newGeminiClientImpl creates a new Gemini client using the API key from environment variables
 func newGeminiClientImpl(ctx context.Context) (*HTTPGeminiClient, error) {
-	apiKey := "AIzaSyD00N4RJfHBSqo1fLfzgKtGnl7NZ-Oy1Os"
+	apiKey := os.Getenv("GEMINI_API_KEY")
 	slog.Info("GEMINI_API_KEY", "apiKey", apiKey)
 	if apiKey == "" {
 		return nil, errors.New("GEMINI_API_KEY environment variable is not set")
@@ -184,42 +184,43 @@ func SimplePDFExtractor(filePath string) (string, error) {
 	slog.Info("Starting PDF file upload", "filePath", filePath)
 
 	// Step 1: Upload the file to the LlamaParse API
-	// jobID, err := uploadFile(filePath)
-	// if err != nil {
-	// 	slog.Error("Failed to upload file", "filePath", filePath, "error", err)
-	// 	return "", fmt.Errorf("failed to upload file: %w", err)
-	// }
-	var jobID="1c257b73-341f-439e-9271-90eed60a9415"
-
+	jobID, err := uploadFile(filePath)
+	if err != nil {
+		slog.Error("Failed to upload file", "filePath", filePath, "error", err)
+		return "", fmt.Errorf("failed to upload file: %w", err)
+	}
+	// TODO: hardcoded for testing
+	// var jobID="1c257b73-341f-439e-9271-90eed60a9415\"
+	// var jobID="f4a8b15e-62c0-4ff3-8618-1d4a0356ea73"
 	// Log successful file upload with job ID
-	// slog.Info("File uploaded successfully", "filePath", filePath, "jobID", jobID)
+	slog.Info("File uploaded successfully", "filePath", filePath, "jobID", jobID)
 
-	// // Step 2: Check the status of the parsing job repeatedly until it is "completed"
-	// var status string
-	// for {
-    // // Log the current job status check attempt
-	// 	slog.Info("Checking parsing job status", "jobID", jobID)
+	// Step 2: Check the status of the parsing job repeatedly until it is "completed"
+	var status string
+	for {
+    // Log the current job status check attempt
+		slog.Info("Checking parsing job status", "jobID", jobID)
 
-	// 	status, err := checkJobStatus(jobID)
-	// 	if err != nil {
-	// 		slog.Error("Failed to check job status", "jobID", jobID, "error", err)
-	// 		return "", fmt.Errorf("failed to check job status: %w", err)
-	// 	}
+		status, err := checkJobStatus(jobID)
+		if err != nil {
+			slog.Error("Failed to check job status", "jobID", jobID, "error", err)
+			return "", fmt.Errorf("failed to check job status: %w", err)
+		}
 
 	// 	// Log the retrieved job status
-	// 	slog.Info("Parsing job status retrieved", "jobID", jobID, "status", status)
+		slog.Info("Parsing job status retrieved", "jobID", jobID, "status", status)
 
-	// 	// If the job is completed or any other non-pending status, break the loop
-	// 	if status != "PENDING" {
-	// 		slog.Info("Parsing job is not pending, breaking out of the loop", "jobID", jobID, "status", status)
-	// 		break
-	// 	}
+		// If the job is completed or any other non-pending status, break the loop
+		if status != "PENDING" {
+			slog.Info("Parsing job is not pending, breaking out of the loop", "jobID", jobID, "status", status)
+			break
+		}
 
-	// 	// If the job is still pending, log the status and wait before retrying
-	// 	slog.Warn("Parsing job not completed yet", "jobID", jobID, "status", status)
-	// 	time.Sleep(5 * time.Second) // Retry every 5 seconds
-	// }
-	// slog.Info("Final parsing job status", "jobID", jobID, "status", status)
+		// If the job is still pending, log the status and wait before retrying
+		slog.Warn("Parsing job not completed yet", "jobID", jobID, "status", status)
+		time.Sleep(5 * time.Second) // Retry every 5 seconds
+	}
+	slog.Info("Final parsing job status", "jobID", jobID, "status", status)
 
 
 	// Step 3: Retrieve the result once the job is completed
