@@ -1,4 +1,4 @@
-version: '3.9'
+version: "3.9"
 
 services:
   postgres:
@@ -73,6 +73,8 @@ services:
       REDIS_ADDR: ${REDIS_ADDR}
       GO_ENV: ${GO_ENV}
       JWT_SECRET: ${JWT_SECRET}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      LLAMA_API_KEY: ${LLAMA_API_KEY}
     networks:
       - app-network-dev
     depends_on:
@@ -91,6 +93,8 @@ services:
       KAFKA_BROKER: ${KAFKA_BROKER}
       REDIS_ADDR: ${REDIS_ADDR}
       GO_ENV: ${GO_ENV}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      LLAMA_API_KEY: ${LLAMA_API_KEY}
     restart: on-failure
     networks:
       - app-network-dev
@@ -103,4 +107,4 @@ networks:
 
 volumes:
   pgdata-dev:
-  go-modules: 
+  go-modules:

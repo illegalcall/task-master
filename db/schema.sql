@@ -4,5 +4,6 @@ CREATE TABLE IF NOT EXISTS jobs (
     status TEXT CHECK (status IN ('pending', 'processing', 'completed', 'failed')) DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     type TEXT NOT NULL,
-    payload JSON
+    payload JSON,
+    response JSON
 );

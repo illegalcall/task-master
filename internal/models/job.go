@@ -11,6 +11,7 @@ type Job struct {
 	Status    string    `json:"status" db:"status"`
 	Type      string    `json:"type" db:"type"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	Response  string    `json:"response" db:"response"`
 }
 
 // pdf parsing job
@@ -49,6 +50,7 @@ type NewParseDocumentPayload struct {
 	PDFSource      string `json:"pdf_source" validate:"required"`      // URL or base64-encoded PDF data
 	ExpectedSchema string `json:"expected_schema" validate:"required"` // JSON schema for desired output
 	Name           string `json:"name" validate:"required"`
+	Description    string `json:"description" validate:"required"`
 }
 
 func (n NewParseDocumentPayload) JSON() any {
