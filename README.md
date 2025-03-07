@@ -11,6 +11,11 @@ docker compose -f docker-compose.dev.yml up --build
 # Run database migrations
 docker exec -i postgres-db psql -U admin -d taskmaster < db/schema.sql
 
+
+#connect to postgres cli
+docker exec -it postgres-db psql -U admin -d taskmaster
+
+
 # Run tests
 go test ./... -v
 ```
@@ -18,6 +23,7 @@ go test ./... -v
 ## 📋 Implementation Progress
 
 ### 1. Core Infrastructure ✅
+
 - [x] Project structure and module setup
 - [x] PostgreSQL database integration
 - [x] Redis for state management
@@ -30,6 +36,7 @@ go test ./... -v
 ### 2. Job Processing System 🚧
 
 #### Basic Features ✅
+
 - [x] REST API endpoints (Fiber)
 - [x] Job creation and storage
 - [x] Kafka producer implementation
@@ -38,6 +45,7 @@ go test ./... -v
 - [x] Simple retry mechanism
 
 #### Core Processing Features 🚧
+
 - [ ] Job type registry system
 - [ ] Payload validation
 - [ ] Configurable retry policies
@@ -50,6 +58,7 @@ go test ./... -v
 - [ ] Result storage
 
 #### Advanced Processing Features 🚧
+
 - [ ] Distributed locking
 - [ ] Job batching
 - [ ] Workflow engine
@@ -62,6 +71,7 @@ go test ./... -v
 ### 3. Developer Experience 🚧
 
 #### Documentation & Tools
+
 - [ ] Job type documentation
 - [ ] Debugging tools
 - [ ] Testing/simulation tools
@@ -70,6 +80,7 @@ go test ./... -v
 - [ ] Hooks/middleware system
 
 #### Web Dashboard
+
 - [ ] React + Tailwind UI
 - [ ] Real-time updates (WebSocket)
 - [ ] Job filtering and search
@@ -81,6 +92,7 @@ go test ./... -v
 ### 4. Operations & Monitoring 🚧
 
 #### Observability
+
 - [x] Structured logging (slog)
 - [ ] Prometheus metrics
 - [ ] Grafana dashboards
@@ -89,6 +101,7 @@ go test ./... -v
 - [ ] Resource monitoring
 
 #### Operational Tools
+
 - [ ] Job archival
 - [ ] Cleanup policies
 - [ ] Audit logging
@@ -100,6 +113,7 @@ go test ./... -v
 ### 5. Production Deployment 🚧
 
 #### Infrastructure
+
 - [ ] Kubernetes setup
 - [ ] Helm charts
 - [ ] Worker auto-scaling
@@ -108,6 +122,7 @@ go test ./... -v
 - [ ] Blue-green deployments
 
 #### Cloud Integration
+
 - [ ] Terraform configurations
 - [ ] AWS/GCP deployment
 - [ ] Cost optimization
@@ -116,17 +131,21 @@ go test ./... -v
 ## 🔄 System Architecture
 
 ### Components
+
 1. **API Service**
+
    - REST/gRPC endpoints
    - Request validation
    - Job creation & queuing
 
 2. **Message Queue**
+
    - Kafka-based processing
    - Job distribution
    - Order guarantee
 
 3. **Worker Service**
+
    - Job execution
    - Status management
    - Error handling
@@ -137,6 +156,7 @@ go test ./... -v
    - Kafka: Message queue
 
 ### Basic Job Flow
+
 1. Submit job via API
 2. Store in PostgreSQL
 3. Queue in Kafka
@@ -147,11 +167,13 @@ go test ./... -v
 ## 🛠 Development
 
 ### Prerequisites
+
 - Go 1.23+
 - Docker & Docker Compose
 - Make (optional)
 
 ### Environment Setup
+
 ```bash
 DATABASE_URL=postgres://admin:admin@postgres-db:5432/taskmaster?sslmode=disable
 KAFKA_BROKER=kafka:9092
@@ -160,6 +182,7 @@ JWT_SECRET=supersecretkey
 ```
 
 ### API Examples
+
 ```bash
 # Authentication
 POST /api/login
@@ -184,6 +207,7 @@ GET /api/jobs
 ```
 
 ## 📝 Contributing
+
 1. Fork repository
 2. Create feature branch
 3. Commit changes
@@ -191,4 +215,5 @@ GET /api/jobs
 5. Open Pull Request
 
 ## 📄 License
+
 MIT License

@@ -14,7 +14,7 @@ type ParseDocumentPayload struct {
 	// DocumentType indicates the source type ("path", "url", or "base64")
 	DocumentType string `json:"documentType"`
 	// OutputSchema defines the expected JSON structure for the parsed result
-	OutputSchema map[string]interface{} `json:"outputSchema"`
+	OutputSchema string`json:"expected_schema"`
 	// Description provides additional context to guide the LLM during parsing
 	Description string `json:"description"`
 	// Options contains optional parsing parameters
@@ -51,7 +51,7 @@ func (p *ParseDocumentPayload) Validate() error {
 	}
 
 	// Validate output schema
-	if p.OutputSchema == nil || len(p.OutputSchema) == 0 {
+	if p.OutputSchema == "" || len(p.OutputSchema) == 0 {
 		return errors.New("outputSchema is required")
 	}
 
@@ -124,120 +124,3 @@ func ValidateWithGJSON(payload []byte) error {
 
 	return nil
 }
-
-// CreateSamplePayloads creates example payloads for testing
-func CreateSamplePayloads() map[string]ParseDocumentPayload {
-	samples := make(map[string]ParseDocumentPayload)
-
-	// Sample 1: Invoice PDF
-	samples["invoice"] = ParseDocumentPayload{
-		Document:     "/path/to/invoice.pdf",
-		DocumentType: "path",
-		OutputSchema: map[string]interface{}{
-			"type": "object",
-			"properties": map[string]interface{}{
-				"invoiceNumber": map[string]interface{}{"type": "string"},
-				"date":          map[string]interface{}{"type": "string"},
-				"vendor":        map[string]interface{}{"type": "string"},
-				"total":         map[string]interface{}{"type": "number"},
-				"items": map[string]interface{}{
-					"type": "array",
-					"items": map[string]interface{}{
-						"type": "object",
-						"properties": map[string]interface{}{
-							"description": map[string]interface{}{"type": "string"},
-							"quantity":    map[string]interface{}{"type": "number"},
-							"unitPrice":   map[string]interface{}{"type": "number"},
-							"amount":      map[string]interface{}{"type": "number"},
-						},
-					},
-				},
-			},
-		},
-		Description: "Extract invoice details including invoice number, date, vendor name, total amount, and line items.",
-		Options: ParseOptions{
-			Language:            "en",
-			OCREnabled:          true,
-			ConfidenceThreshold: 0.7,
-		},
-	}
-
-	// Sample 2: Resume PDF
-	samples["resume"] = ParseDocumentPayload{
-		Document:     "https://example.com/resume.pdf",
-		DocumentType: "url",
-		OutputSchema: map[string]interface{}{
-			"type": "object",
-			"properties": map[string]interface{}{
-				"name":    map[string]interface{}{"type": "string"},
-				"email":   map[string]interface{}{"type": "string"},
-				"phone":   map[string]interface{}{"type": "string"},
-				"summary": map[string]interface{}{"type": "string"},
-				"experience": map[string]interface{}{
-					"type": "array",
-					"items": map[string]interface{}{
-						"type": "object",
-						"properties": map[string]interface{}{
-							"company":     map[string]interface{}{"type": "string"},
-							"position":    map[string]interface{}{"type": "string"},
-							"startDate":   map[string]interface{}{"type": "string"},
-							"endDate":     map[string]interface{}{"type": "string"},
-							"description": map[string]interface{}{"type": "string"},
-						},
-					},
-				},
-				"education": map[string]interface{}{
-					"type": "array",
-					"items": map[string]interface{}{
-						"type": "object",
-						"properties": map[string]interface{}{
-							"institution": map[string]interface{}{"type": "string"},
-							"degree":      map[string]interface{}{"type": "string"},
-							"year":        map[string]interface{}{"type": "string"},
-						},
-					},
-				},
-				"skills": map[string]interface{}{
-					"type":  "array",
-					"items": map[string]interface{}{"type": "string"},
-				},
-			},
-		},
-		Description: "Extract candidate information from resume including personal details, work experience, education, and skills.",
-		Options: ParseOptions{
-			Language:   "en",
-			OCREnabled: false,
-		},
-	}
-
-	// Sample 3: Contract PDF
-	samples["contract"] = ParseDocumentPayload{
-		Document:     "base64encodedpdfcontent...",
-		DocumentType: "base64",
-		OutputSchema: map[string]interface{}{
-			"type": "object",
-			"properties": map[string]interface{}{
-				"contractTitle":    map[string]interface{}{"type": "string"},
-				"parties":          map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
-				"effectiveDate":    map[string]interface{}{"type": "string"},
-				"terminationDate":  map[string]interface{}{"type": "string"},
-				"paymentTerms":     map[string]interface{}{"type": "string"},
-				"deliverables":     map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
-				"specialClauses":   map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
-				"confidentiality":  map[string]interface{}{"type": "string"},
-				"disputeHandling":  map[string]interface{}{"type": "string"},
-				"governingLaw":     map[string]interface{}{"type": "string"},
-				"signatoryDetails": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
-			},
-		},
-		Description: "Extract key contract terms and conditions including parties, effective dates, payment terms, deliverables, and special clauses.",
-		Options: ParseOptions{
-			Language:            "en",
-			OCREnabled:          true,
-			ConfidenceThreshold: 0.8,
-			MaxPages:            10,
-		},
-	}
-
-	return samples
-} 
