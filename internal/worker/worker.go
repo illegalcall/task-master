@@ -39,6 +39,10 @@ func (w *Worker) Start(ctx context.Context) error {
 	topics := []string{w.cfg.Kafka.Topic}
 	slog.Info("Starting worker", "topics", topics)
 
+	// Initialize the jobs database
+	jobs.InitDB(w.db)
+	slog.Info("Jobs database initialized")
+
 	// Setup signal handling for graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -201,7 +205,7 @@ func (w *Worker) processJobLogic(job struct {
 	case models.JobTypePDFParse:
 		slog.Info("Processing PDF parsing job", "jobID", job.ID)
 		// Process PDF parsing job
-		result, err := jobs.ParseDocumentHandler(ctx, payloadBytes)
+		result, err := jobs.ParseDocumentHandler(ctx, payloadBytes, job.ID)
 		if err != nil {
 			slog.Error("PDF parsing failed", "jobID", job.ID, "error", err)
 			return fmt.Errorf("failed to process PDF: %w", err)

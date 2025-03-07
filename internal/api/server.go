@@ -173,7 +173,7 @@ func (s *Server) handleGetJob(c *fiber.Ctx) error {
 	}
 
 	var job models.Job
-	query := "SELECT id, name, status, type FROM jobs WHERE id = $1"
+	query := "SELECT id, name, status, type, response FROM jobs WHERE id = $1"
 	err = s.db.DB.Get(&job, query, jobID)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{

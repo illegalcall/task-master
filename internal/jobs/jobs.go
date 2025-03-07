@@ -2,7 +2,33 @@ package jobs
 
 import (
 	"context"
+
+	"github.com/illegalcall/task-master/pkg/database"
 )
+
+// DB holds the database clients for the jobs package
+type DB struct {
+	Clients *database.Clients
+}
+
+// Global instance of the database clients
+var db *DB
+
+// InitDB initializes the database clients for the jobs package
+func InitDB(clients *database.Clients) {
+	db = &DB{
+		Clients: clients,
+	}
+}
+
+// GetDB returns the global database instance
+func GetDB() *DB {
+	return db
+}
+
+//connect to the database
+
+
 
 // Result represents the outcome of a job execution
 type Result struct {
