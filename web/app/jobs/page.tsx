@@ -23,26 +23,28 @@ function JobsList({ jobs }: JobsListProps) {
     <div className="grid gap-4">
       {jobs.length > 0 ? (
         jobs.map((job) => (
-          <Card key={job.id} className="p-4">
-            <h2 className="text-lg font-semibold">{job.name}</h2>
-            <p className="text-sm">
-              Status:{" "}
-              <span
-                className={`font-semibold capitalize ${
-                  job.status === "pending"
-                    ? "text-blue-500"
-                    : job.status === "completed"
-                    ? "text-green-500"
-                    : "text-red-500"
-                }`}
-              >
-                {job.status}
-              </span>
-            </p>
-            <p className="text-xs text-gray-400">
-              Created At: {format(new Date(job.created_at), "PPP")}
-            </p>
-          </Card>
+          <Link key={job.id} href={`/jobs/${job.id}`} className="block">
+            <Card className="p-4 transition-all hover:shadow-md">
+              <h2 className="text-lg font-semibold">{job.name}</h2>
+              <p className="text-sm">
+                Status:{" "}
+                <span
+                  className={`font-semibold capitalize ${
+                    job.status === "pending"
+                      ? "text-blue-500"
+                      : job.status === "completed"
+                      ? "text-green-500"
+                      : "text-red-500"
+                  }`}
+                >
+                  {job.status}
+                </span>
+              </p>
+              <p className="text-xs text-gray-400">
+                Created At: {format(new Date(job.created_at), "PPP")}
+              </p>
+            </Card>
+          </Link>
         ))
       ) : (
         <p className="text-center text-gray-500">No jobs found.</p>
