@@ -1,8 +1,22 @@
 import Link from "next/link"
 import { format } from "date-fns"
 
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar"
+import { AppSidebar } from "@/components/app-sidebar"
 import { JobsClient } from "@/components/jobs/jobs-client"
 
 import { fetchJobs } from "./action"
@@ -73,17 +87,34 @@ export default async function JobsPage({
       job.created_at.startsWith(searchParams.date)
     )
   }
-
   return (
-    <section className="container mx-auto py-10">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-3xl font-extrabold">Jobs</h1>
-        <Link href="/jobs/new">
-          <Button size="sm">Add Job</Button>
-        </Link>
-      </div>
-      <JobsClient />
-      <JobsList jobs={filteredJobs} />
-    </section>
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset>
+        <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
+          <div className="flex items-center gap-2 px-4">
+            <SidebarTrigger className="-ml-1" />
+            <Separator orientation="vertical" className="mr-2 h-4" />
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem className="hidden md:block">
+                  <BreadcrumbLink href="#">Jobs</BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator className="hidden md:block" />
+                <BreadcrumbItem className="hidden md:block">
+                  <BreadcrumbLink href="/jobs/pdf-parser">
+                    PDF Parser
+                  </BreadcrumbLink>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
+          </div>
+        </header>
+        <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+          <JobsClient />
+          <JobsList jobs={filteredJobs} />
+        </div>
+      </SidebarInset>
+    </SidebarProvider>
   )
 }
