@@ -85,6 +85,16 @@ export default async function JobDetailsPage({ params }: PageProps) {
     },
   }
 
+  // Parse the job's response string if it exists
+  let jsonResponse = sampleJsonResponse;
+  try {
+    if (job.response) {
+      jsonResponse = JSON.parse(job.response);
+    }
+  } catch (error) {
+    console.error("Error parsing job response:", error);
+  }
+
   return (
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -202,12 +212,12 @@ export default async function JobDetailsPage({ params }: PageProps) {
                   Raw JSON response from the API
                 </CardDescription>
               </div>
-              <CopyButton jsonData={sampleJsonResponse} />
+              <CopyButton jsonData={jsonResponse} />
             </CardHeader>
             <CardContent>
               <div className="bg-black text-white p-4 rounded-lg overflow-auto max-h-[400px]">
                 <pre className="text-sm">
-                  <code>{JSON.stringify(sampleJsonResponse, null, 2)}</code>
+                  <code>{JSON.stringify(jsonResponse, null, 2)}</code>
                 </pre>
               </div>
             </CardContent>

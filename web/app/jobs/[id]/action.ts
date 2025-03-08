@@ -8,6 +8,7 @@ export interface Job {
   status: string
   type: string
   created_at: string
+  response: string
 }
 
 /**

@@ -2,17 +2,27 @@ import { NextResponse, type NextRequest } from "next/server"
 
 export const verifyToken = async (token: string) => {
   try {
-    const response = await fetch(`${process.env.API_URL}/api/jobs`, {
+    // Use the /api/jobs endpoint which is protected and will validate the token
+    const apiUrl = process.env.API_URL || "http://localhost:8080"
+    const response = await fetch(`${apiUrl}/api/jobs`, {
+      method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
       },
+      // Add cache: 'no-store' to prevent caching issues
+      cache: "no-store",
     })
 
-    if (response.status === 401) {
-      return false
+    // A 200 status indicates successful authentication
+    if (response.ok) {
+      return true
     }
-    return true
+
+    // Any other status (including 401 Unauthorized) means verification failed
+    return false
   } catch (error) {
+    console.error("Token verification error:", error)
     return false
   }
 }
@@ -26,9 +36,14 @@ export async function middleware(request: NextRequest) {
   if (request.nextUrl.pathname === "/login") {
     const token = request.cookies.get("token")
     if (token) {
-      const isVerified = await verifyToken(token.value)
-      if (isVerified) {
-        return NextResponse.redirect(new URL("/", request.url))
+      try {
+        const isVerified = await verifyToken(token.value)
+        if (isVerified) {
+          return NextResponse.redirect(new URL("/", request.url))
+        }
+      } catch (error) {
+        console.error("Error verifying token on login page:", error)
+        // Continue to login page if verification fails
       }
     }
     return NextResponse.next()
@@ -40,9 +55,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url))
   }
 
-  const isVerified = await verifyToken(token.value)
-  console.log("isVerified", isVerified)
-  if (!isVerified) {
+  try {
+    const isVerified = await verifyToken(token.value)
+    if (!isVerified) {
+      return NextResponse.redirect(new URL("/login", request.url))
+    }
+  } catch (error) {
+    console.error("Error in middleware token verification:", error)
     return NextResponse.redirect(new URL("/login", request.url))
   }
 
