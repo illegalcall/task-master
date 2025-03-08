@@ -1,4 +1,6 @@
-CREATE TABLE IF NOT EXISTS jobs (
+DROP TABLE IF EXISTS jobs;
+
+CREATE TABLE jobs (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
     status TEXT CHECK (status IN ('pending', 'processing', 'completed', 'failed')) DEFAULT 'pending',
