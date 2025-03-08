@@ -44,7 +44,7 @@ const data = {
       items: [
         {
           title: "PDF Parser",
-          url: "#",
+          url: "/jobs/pdf-parser",
         },
       ],
     },

@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { FileDropzone } from "@/components/file-dropzone"
 import { JsonEditor } from "@/components/json-editor"
-import { createJob } from "@/app/jobs/new/action"
+import { createJob } from "@/app/jobs/pdf-parser/new/action"
 
 type TabValue = "upload" | "url"
 
