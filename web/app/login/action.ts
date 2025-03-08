@@ -1,7 +1,6 @@
 "use server"
 
 import { cookies } from "next/headers"
-import { redirect } from "next/navigation"
 
 export async function loginUser({
   username,
@@ -11,6 +10,7 @@ export async function loginUser({
   password: string
 }) {
   try {
+    cookies().delete("token")
     const response = await fetch(`${process.env.API_URL}/api/login`, {
       method: "POST",
       headers: {
@@ -18,7 +18,6 @@ export async function loginUser({
       },
       body: JSON.stringify({ username, password }),
     })
-
     const data = await response.json()
 
     if (!response.ok) {
