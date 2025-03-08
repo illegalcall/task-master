@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Textarea } from "@/components/ui/textarea"
 import { FileDropzone } from "@/components/file-dropzone"
 import { JsonEditor } from "@/components/json-editor"
 import { createJob } from "@/app/jobs/new/action"
@@ -21,10 +22,12 @@ export function JobForm() {
     const jobName = formData.get("job_name") as string
     const expectedSchema = formData.get("expected_schema") as string
     const source = activeTab === "upload" ? pdfBase64 : pdfSource
+    const description = formData.get("description") as string
     await createJob({
       jobName,
       pdfSource: source,
       expectedSchema,
+      description,
     })
   }
 
@@ -39,6 +42,14 @@ export function JobForm() {
             type="text"
             placeholder="Enter your Job Name"
             required
+          />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="description">Description</Label>
+          <Textarea
+            id="description"
+            name="description"
+            placeholder="Enter your Job Description"
           />
         </div>
         <div className="grid gap-2">

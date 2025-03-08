@@ -6,19 +6,22 @@ export async function createJob({
   jobName,
   pdfSource,
   expectedSchema,
+  description,
 }: {
   jobName: string
   pdfSource: string
   expectedSchema: string
+  description: string
 }) {
   try {
     const payload = JSON.stringify({
       name: jobName,
       pdf_source: pdfSource,
       expected_schema: expectedSchema,
+      description: description,
     })
 
-    console.log("payload", payload)
+    const token = cookies().get("token")
 
     const response = await fetch(
       `${process.env.API_URL}/api/jobs/parse-document`,
@@ -26,6 +29,7 @@ export async function createJob({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token?.value}`,
         },
         body: payload,
       }
