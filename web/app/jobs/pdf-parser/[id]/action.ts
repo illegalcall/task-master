@@ -17,9 +17,7 @@ export interface Job {
  * @returns The job details
  */
 export async function fetchJobById(id: string) {
-  const token =
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NDE0NTQwMDcsImlhdCI6MTc0MTM2NzYwNywidXNlcm5hbWUiOiJhZG1pbiJ9.XvEqG3PBldQhc8loGr9kfZeNzlzqmAtJQGWvesd1oBw"
-
+  const token = cookies().get("token")?.value
   const response = await fetch(`${process.env.API_URL}/api/jobs/${id}`, {
     headers: {
       Authorization: `Bearer ${token}`,

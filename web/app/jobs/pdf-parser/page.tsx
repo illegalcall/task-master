@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { format } from "date-fns"
+import { Plus } from "lucide-react"
 
 import {
   Breadcrumb,
@@ -37,7 +38,11 @@ function JobsList({ jobs }: JobsListProps) {
     <div className="grid gap-4">
       {jobs.length > 0 ? (
         jobs.map((job) => (
-          <Link key={job.id} href={`/jobs/${job.id}`} className="block">
+          <Link
+            key={job.id}
+            href={`/jobs/pdf-parser/${job.id}`}
+            className="block"
+          >
             <Card className="p-4 transition-all hover:shadow-md">
               <h2 className="text-lg font-semibold">{job.name}</h2>
               <p className="text-sm">
@@ -108,6 +113,14 @@ export default async function JobsPage({
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
+          </div>
+          <div className="ml-auto mr-4">
+            <Button asChild size="sm">
+              <Link href="/jobs/pdf-parser/new">
+                <Plus className="h-4 w-4 mr-1" />
+                Add Job
+              </Link>
+            </Button>
           </div>
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
