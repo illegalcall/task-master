@@ -69,7 +69,7 @@ func (s *Server) handlePDFParseJob(c *fiber.Ctx) error {
 
 	// Create a new job
 	basicJob := models.Job{
-		Name:   "PDF Parse Job",
+		Name:   payload.Name,
 		Status: models.StatusPending,
 		Type:   models.JobTypePDFParse,
 	}
@@ -78,8 +78,8 @@ func (s *Server) handlePDFParseJob(c *fiber.Ctx) error {
 		Data: payload,
 	}
 	fmt.Println("Job created:", job)
-	fmt.Println("job.Data:",job.Data)
-	fmt.Println("job.data.type:",reflect.TypeOf(job.Data))
+	fmt.Println("job.Data:", job.Data)
+	fmt.Println("job.data.type:", reflect.TypeOf(job.Data))
 	// Insert job into the database
 	// Marshal the job payload to JSON
 	payloadBytes, err := json.Marshal(job.Data)
@@ -105,7 +105,6 @@ func (s *Server) handlePDFParseJob(c *fiber.Ctx) error {
 		})
 	}
 	fmt.Println("Job inserted into database with ID:", job.ID)
-
 
 	// Store job payload in Redis
 	jobPayload := struct {
@@ -168,8 +167,6 @@ func (s *Server) handlePDFParseJob(c *fiber.Ctx) error {
 	})
 }
 
-
-
 // validatePDFParsePayload validates the PDF parse job payload
 func validatePDFParsePayload(payload *models.NewParseDocumentPayload) error {
 	// Validate PDF source
@@ -208,9 +205,9 @@ func validatePDFParsePayload(payload *models.NewParseDocumentPayload) error {
 
 	// Validate that expected_schema is valid JSON
 	var js json.RawMessage
-    if err := json.Unmarshal([]byte(payload.ExpectedSchema), &js); err != nil {
-        return fmt.Errorf("invalid JSON schema: %v", err)
-    }
+	if err := json.Unmarshal([]byte(payload.ExpectedSchema), &js); err != nil {
+		return fmt.Errorf("invalid JSON schema: %v", err)
+	}
 
 	return nil
 }

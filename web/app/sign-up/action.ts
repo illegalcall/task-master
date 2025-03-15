@@ -29,6 +29,34 @@ export async function signUpUser({
       return { error: error.message }
     }
 
+    // Also create user profile in our backend to keep them in sync
+    try {
+      // Only create profile if user was created successfully and we have the user ID
+      if (data?.user?.id) {
+        const response = await fetch(`${process.env.API_URL}/api/users`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ 
+            user_id: data.user.id 
+          }),
+        })
+
+        if (!response.ok) {
+          console.error("Error creating user profile:", await response.text())
+          // We don't return an error here because the user was already created in Supabase auth
+          // The profile can be created later if needed
+        } else {
+          console.log("User profile created successfully")
+        }
+      }
+    } catch (profileError) {
+      console.error("Error creating user profile:", profileError)
+      // We don't fail the signup if profile creation fails
+      // The profile can be created later
+    }
+
     return { success: true }
   } catch (error: any) {
     console.error("Unexpected error during sign up:", error.message)

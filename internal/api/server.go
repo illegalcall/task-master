@@ -93,6 +93,7 @@ func (s *Server) setupRoutes() {
 
 	// Public routes
 	api.Post("/login", s.handleLogin)
+	api.Post("/users", s.handleCreateProfile)
 
 	// Protected routes
 	protected := api.Use(jwtware.New(jwtware.Config{
