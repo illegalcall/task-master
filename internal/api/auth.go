@@ -1,14 +1,17 @@
 package api
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
+
+	"github.com/illegalcall/task-master/internal/pkg/supabase"
 )
 
 type LoginRequest struct {
-	Username string `json:"username"`
+	Email    string `json:"email"` // Changed from Username to Email
 	Password string `json:"password"`
 }
 
@@ -26,14 +29,34 @@ func (s *Server) handleLogin(c *fiber.Ctx) error {
 	}
 
 	// Validate required fields
-	if req.Username == "" || req.Password == "" {
+	if req.Email == "" || req.Password == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Username and password are required",
+			"error": "Email and password are required",
 		})
 	}
 
-	// TODO: Replace with database authentication
-	if !isValidCredentials(req.Username, req.Password) {
+	// Log authentication attempt
+	s.logger.Info("Authentication attempt", "email", req.Email)
+
+	// Validate credentials with Supabase
+	valid, err := supabase.ValidateCredentials(req.Email, req.Password)
+	if err != nil {
+		// Log the detailed error for server-side debugging
+		s.logger.Error("Authentication error", "error", err)
+
+		// Return user-friendly error message
+		errorMessage := "Authentication service error"
+		if s.cfg.Server.Environment != "production" {
+			// In non-production environments, include error details
+			errorMessage = fmt.Sprintf("Authentication error: %v", err)
+		}
+
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": errorMessage,
+		})
+	}
+
+	if !valid {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "Invalid credentials",
 		})
@@ -41,9 +64,9 @@ func (s *Server) handleLogin(c *fiber.Ctx) error {
 
 	// Generate JWT token
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"username": req.Username,
-		"exp":      time.Now().Add(24 * time.Hour).Unix(), // Default to 24h if not set
-		"iat":      time.Now().Unix(),
+		"email": req.Email, // Use email instead of username
+		"exp":   time.Now().Add(24 * time.Hour).Unix(),
+		"iat":   time.Now().Unix(),
 	})
 
 	tokenString, err := token.SignedString([]byte(s.cfg.JWT.Secret))
@@ -52,6 +75,8 @@ func (s *Server) handleLogin(c *fiber.Ctx) error {
 			"error": "Failed to generate token",
 		})
 	}
+
+	s.logger.Info("User successfully authenticated", "email", req.Email)
 
 	return c.JSON(LoginResponse{
 		Token:     tokenString,

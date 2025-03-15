@@ -21,21 +21,21 @@ export default function LoginPage() {
         <form
           action={async (formData) => {
             "use server"
-            const username = formData.get("username") as string
+            const email = formData.get("email") as string
             const password = formData.get("password") as string
-            await loginUser({ username, password })
+            await loginUser({ email, password })
             redirect("/")
           }}
           className="w-[350px]"
         >
           <div className="grid gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="username">Username</Label>
+              <Label htmlFor="email">Email</Label>
               <Input
-                id="username"
-                name="username"
-                type="text"
-                placeholder="Enter your Username"
+                id="email"
+                name="email"
+                type="email"
+                placeholder="Enter your email"
                 required
               />
             </div>

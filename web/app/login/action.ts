@@ -3,10 +3,10 @@
 import { cookies } from "next/headers"
 
 export async function loginUser({
-  username,
+  email,
   password,
 }: {
-  username: string
+  email: string
   password: string
 }) {
   try {
@@ -16,7 +16,7 @@ export async function loginUser({
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ email, password }),
     })
     const data = await response.json()
 

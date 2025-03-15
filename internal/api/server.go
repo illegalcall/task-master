@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"log/slog"
+	"os"
 
 	"github.com/IBM/sarama"
 	"github.com/gofiber/fiber/v2"
@@ -16,6 +18,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/illegalcall/task-master/internal/config"
 	"github.com/illegalcall/task-master/internal/models"
+	"github.com/illegalcall/task-master/internal/pkg/supabase"
 	"github.com/illegalcall/task-master/internal/storage"
 	"github.com/illegalcall/task-master/pkg/database"
 )
@@ -30,6 +33,17 @@ type Server struct {
 }
 
 func NewServer(cfg *config.Config, db *database.Clients, producer sarama.SyncProducer) (*Server, error) {
+	// Initialize Supabase client
+	supabaseURL := os.Getenv("SUPABASE_URL")
+	supabaseKey := os.Getenv("SUPABASE_SERVICE_KEY")
+
+	if supabaseURL != "" && supabaseKey != "" {
+		err := supabase.InitClient(supabaseURL, supabaseKey)
+		if err != nil {
+			log.Printf("WARNING: Failed to initialize Supabase client: %v", err)
+		}
+	}
+
 	// Initialize storage
 	localStorage, err := storage.NewLocalStorage(cfg.Storage.TempDir)
 	if err != nil {
