@@ -20,7 +20,6 @@ import (
 	"google.golang.org/api/option"
 )
 
-
 var llamaCloudAPIKey = os.Getenv("LLAMA_API_KEY")
 
 // Make these functions variables so they can be mocked in tests
@@ -37,7 +36,7 @@ type GeminiClient interface {
 // HTTPGeminiClient implements the GeminiClient interface using the official genai package
 type HTTPGeminiClient struct {
 	client *genai.Client
-	model *genai.GenerativeModel
+	model  *genai.GenerativeModel
 	// Optional function for testing/mocking
 	generateContentFunc func(ctx context.Context, text string, schema string, description string) ([]byte, error)
 }
@@ -86,7 +85,7 @@ func newGeminiClientImpl(ctx context.Context) (*HTTPGeminiClient, error) {
 
 	return &HTTPGeminiClient{
 		client: client,
-		model: model,
+		model:  model,
 	}, nil
 }
 
@@ -124,7 +123,7 @@ DOCUMENT TEXT:
 
 Respond with ONLY a valid JSON object matching the schema. Do not include any explanations or markdown formatting.
 `, description, schemaStr, text)
-	slog.Info("Prompt built for Gemini", "promptLength", len(prompt))
+	slog.Info("Prompt built for Gemini", "promptLength", "promt", len(prompt), prompt)
 
 	// Use the genai client to generate content
 	resp, err := c.model.GenerateContent(ctx, genai.Text(prompt))
@@ -138,7 +137,7 @@ Respond with ONLY a valid JSON object matching the schema. Do not include any ex
 		slog.Info("Gemini returned empty candidates list")
 		return nil, errors.New("no response generated")
 	}
-	
+
 	if len(resp.Candidates[0].Content.Parts) == 0 {
 		slog.Info("Gemini returned candidate with empty parts list")
 		return nil, errors.New("no response generated")
@@ -147,18 +146,18 @@ Respond with ONLY a valid JSON object matching the schema. Do not include any ex
 	// Extract the response text
 	responsePart := resp.Candidates[0].Content.Parts[0]
 	slog.Info("Extracted first response part", "partType", fmt.Sprintf("%T", responsePart))
-	
+
 	responseText, ok := responsePart.(genai.Text)
 	if !ok {
 		slog.Info("Unexpected response part type", "type", fmt.Sprintf("%T", responsePart))
 		return nil, fmt.Errorf("unexpected response type: %T", responsePart)
 	}
 	slog.Info("Response text extracted", "textLength", len(string(responseText)))
-	
+
 	// Clean up response - remove any markdown code block formatting
 	cleanResponse := strings.TrimSpace(string(responseText))
 	slog.Info("Trimmed response space", "beforeLength", len(string(responseText)), "afterLength", len(cleanResponse))
-	
+
 	cleanResponse = strings.TrimPrefix(cleanResponse, "```json")
 	cleanResponse = strings.TrimPrefix(cleanResponse, "```")
 	cleanResponse = strings.TrimSuffix(cleanResponse, "```")
@@ -198,7 +197,7 @@ func SimplePDFExtractor(filePath string) (string, error) {
 	// Step 2: Check the status of the parsing job repeatedly until it is "completed"
 	var status string
 	for {
-    // Log the current job status check attempt
+		// Log the current job status check attempt
 		slog.Info("Checking parsing job status", "jobID", jobID)
 
 		status, err := checkJobStatus(jobID)
@@ -207,7 +206,7 @@ func SimplePDFExtractor(filePath string) (string, error) {
 			return "", fmt.Errorf("failed to check job status: %w", err)
 		}
 
-	// 	// Log the retrieved job status
+		// 	// Log the retrieved job status
 		slog.Info("Parsing job status retrieved", "jobID", jobID, "status", status)
 
 		// If the job is completed or any other non-pending status, break the loop
@@ -221,7 +220,6 @@ func SimplePDFExtractor(filePath string) (string, error) {
 		time.Sleep(5 * time.Second) // Retry every 5 seconds
 	}
 	slog.Info("Final parsing job status", "jobID", jobID, "status", status)
-
 
 	// Step 3: Retrieve the result once the job is completed
 	slog.Info("Retrieving parsing result", "jobID", jobID)
@@ -356,7 +354,7 @@ func checkJobStatus(jobID string) (string, error) {
 	defer resp.Body.Close()
 
 	// Log the response status code for debugging purposes
-	slog.Info("Received response from LlamaParse API", "checking status",resp)
+	slog.Info("Received response from LlamaParse API", "checking status", resp)
 
 	// Read the response body
 	body, err := io.ReadAll(resp.Body)
@@ -515,7 +513,6 @@ func extractPDFTextImpl(documentSource string, documentType string, maxPages int
 	}
 }
 
-
 // Global tracker instance
 var globalTracker *ParsingTracker
 
@@ -533,15 +530,15 @@ func GetParsingTracker() *ParsingTracker {
 }
 
 // ParseDocumentWithTracking handles document parsing jobs with status tracking and retries
-func  ParseDocumentWithTracking(ctx context.Context, payload []byte, jobID int) (Result, error) {
+func ParseDocumentWithTracking(ctx context.Context, payload []byte, jobID int) (Result, error) {
 	slog.Info("ParseDocumentWithTracking started", "payload", string(payload))
 	// Parse the payload to get the document ID
 	var parsedPayload struct {
-		DocumentID string `json:"documentID"`
-		DocumentType string `json:"documentType"`
+		DocumentID     string `json:"documentID"`
+		DocumentType   string `json:"documentType"`
 		DocumentSource string `json:"documentSource"`
 		ExpectedSchema string `json:"expected_schema"`
-		Description string `json:"description"`
+		Description    string `json:"description"`
 	}
 	if err := json.Unmarshal(payload, &parsedPayload); err != nil {
 		slog.Info("Failed to extract documentID from payload", "error", err)
@@ -561,7 +558,7 @@ func  ParseDocumentWithTracking(ctx context.Context, payload []byte, jobID int) 
 
 	tracker := GetParsingTracker()
 	slog.Info("Parsing tracker obtained", "documentID", documentID)
-	
+
 	// Update status to uploaded if this is the first time
 	tracker.UpdateStatus(documentID, StatusUploaded, nil)
 	slog.Info("Tracker status updated to 'uploaded'", "documentID", documentID)
@@ -585,7 +582,7 @@ func  ParseDocumentWithTracking(ctx context.Context, payload []byte, jobID int) 
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		start := time.Now()
 		slog.Info("Retry attempt started", "attempt", attempt, "documentID", documentID)
-		
+
 		// If this is a retry attempt, update status to retrying and delay briefly
 		if attempt > 1 {
 			tracker.UpdateStatus(documentID, StatusRetrying, nil)
@@ -596,7 +593,7 @@ func  ParseDocumentWithTracking(ctx context.Context, payload []byte, jobID int) 
 		// Update status to parsing
 		tracker.UpdateStatus(documentID, StatusParsing, nil)
 		slog.Info("Tracker status updated to 'parsing'", "documentID", documentID, "attempt", attempt)
-		
+
 		// Extract and validate the document
 		var parsedPayload ParseDocumentPayload
 		if err := json.Unmarshal(payload, &parsedPayload); err != nil {
@@ -662,7 +659,6 @@ func  ParseDocumentWithTracking(ctx context.Context, payload []byte, jobID int) 
 			continue // Try again if retries are available
 		}
 
-
 		// Parse the structured data into our response format
 		var parsedContent interface{}
 		if err := json.Unmarshal(structuredData, &parsedContent); err != nil {
@@ -676,7 +672,7 @@ func  ParseDocumentWithTracking(ctx context.Context, payload []byte, jobID int) 
 		// Calculate processing time
 		elapsedTime := time.Since(start)
 		slog.Info("Processing time calculated", "documentID", documentID, "attempt", attempt, "elapsedTimeMs", elapsedTime.Milliseconds())
-		
+
 		// Update metrics and construct the parsed document
 		parsedDocument := ParsedDocument{
 			Content: parsedContent,
@@ -702,7 +698,7 @@ func  ParseDocumentWithTracking(ctx context.Context, payload []byte, jobID int) 
 		// Update status to complete
 		tracker.UpdateStatus(documentID, StatusComplete, nil)
 		slog.Info("Tracker status updated to 'complete'", "documentID", documentID, "attempt", attempt)
-		
+
 		// Success, exit the retry loop
 		finalErr = nil
 		break
@@ -717,11 +713,10 @@ func  ParseDocumentWithTracking(ctx context.Context, payload []byte, jobID int) 
 	return result, nil
 }
 
-
 // ParseDocumentHandler handles document parsing jobs
 func ParseDocumentHandler(ctx context.Context, payload []byte, jobID int) (Result, error) {
 	slog.Info("ParseDocumentHandler invoked", "payload", string(payload))
-	
+
 	// Attempt to extract document ID from payload
 	var docIDContainer struct {
 		DocumentID string `json:"documentID"`
@@ -732,13 +727,13 @@ func ParseDocumentHandler(ctx context.Context, payload []byte, jobID int) (Resul
 		return simpleParseDocument(ctx, payload)
 	}
 	slog.Info("Extracted documentID container", "documentID", docIDContainer.DocumentID)
-	
+
 	documentID := docIDContainer.DocumentID
 	if documentID == "" {
 		slog.Info("No documentID found in payload, generating a new one")
 		documentID = fmt.Sprintf("doc-%s", time.Now().Format("20060102-150405-999999"))
 		slog.Info("Generated documentID", "documentID", documentID)
-		
+
 		// Add the generated documentID to the payload
 		var parsedPayload map[string]interface{}
 		if err := json.Unmarshal(payload, &parsedPayload); err != nil {
@@ -746,13 +741,13 @@ func ParseDocumentHandler(ctx context.Context, payload []byte, jobID int) (Resul
 			slog.Info("Falling back to simpleParseDocument due to unmarshalling error on map")
 			return simpleParseDocument(ctx, payload)
 		}
-		slog.Info("Garvit rand 696969",parsedPayload)
+		slog.Info("Garvit rand 696969", parsedPayload)
 		parsedPayload["documentID"] = documentID
 		parsedPayload["documentType"] = "url"
-		parsedPayload["documentSource"]=parsedPayload["pdf_source"]
-		parsedPayload["description"]=parsedPayload["description"]
-		slog.Info("Inserted documentID into payload map", "documentID", documentID, "payloadMap", parsedPayload,"documentType", parsedPayload["documentType"],"documentSource", parsedPayload["documentSource"])
-		
+		parsedPayload["documentSource"] = parsedPayload["pdf_source"]
+		parsedPayload["description"] = parsedPayload["description"]
+		slog.Info("Inserted documentID into payload map", "documentID", documentID, "payloadMap", parsedPayload, "documentType", parsedPayload["documentType"], "documentSource", parsedPayload["documentSource"])
+
 		// Reconstruct the payload with the documentID included
 		updatedPayload, err := json.Marshal(parsedPayload)
 		if err != nil {

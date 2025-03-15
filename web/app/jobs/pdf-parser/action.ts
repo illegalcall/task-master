@@ -16,7 +16,7 @@ export async function fetchJobs() {
   }
 
   const resJson = await response.json()
-  const jobs = resJson.jobs
+  const jobs = resJson.jobs || []
 
   return jobs
 }

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,25 +11,57 @@ import { Textarea } from "@/components/ui/textarea"
 import { FileDropzone } from "@/components/file-dropzone"
 import { JsonEditor } from "@/components/json-editor"
 import { createJob } from "@/app/jobs/pdf-parser/new/action"
+import { useToastContext } from "@/components/toast-provider"
 
 type TabValue = "upload" | "url"
 
 export function JobForm() {
+  const router = useRouter()
+  const { toast } = useToastContext()
   const [pdfBase64, setPdfBase64] = useState("")
   const [pdfSource, setPdfSource] = useState("")
   const [activeTab, setActiveTab] = useState<TabValue>("upload")
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handleSubmit = async (formData: FormData) => {
-    const jobName = formData.get("job_name") as string
-    const expectedSchema = formData.get("expected_schema") as string
-    const source = activeTab === "upload" ? pdfBase64 : pdfSource
-    const description = formData.get("description") as string
-    await createJob({
-      jobName,
-      pdfSource: source,
-      expectedSchema,
-      description,
-    })
+    setIsSubmitting(true)
+    try {
+      const jobName = formData.get("job_name") as string
+      const expectedSchema = formData.get("expected_schema") as string
+      const source = activeTab === "upload" ? pdfBase64 : pdfSource
+      const description = formData.get("description") as string
+      
+      const result = await createJob({
+        jobName,
+        pdfSource: source,
+        expectedSchema,
+        description,
+      })
+
+      if (result.success) {
+        toast({
+          title: "Success",
+          description: "Job created successfully",
+          variant: "success",
+        })
+        // Redirect to jobs list page
+        router.push("/jobs/pdf-parser")
+      } else {
+        toast({
+          title: "Error",
+          description: result.error || "Failed to create job",
+          variant: "destructive",
+        })
+        setIsSubmitting(false)
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      })
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -94,13 +127,14 @@ export function JobForm() {
           type="submit"
           className="w-full"
           disabled={
+            isSubmitting ||
             !(
               (activeTab === "upload" && pdfBase64) ||
               (activeTab === "url" && pdfSource)
             )
           }
         >
-          Create Job
+          {isSubmitting ? "Creating Job..." : "Create Job"}
         </Button>
       </div>
     </form>

@@ -38,17 +38,31 @@ export async function createJob({
     const data = await response.json()
 
     if (!response.ok) {
-      return { error: data.error || "Invalid credentials" }
+      return { 
+        success: false, 
+        error: data.error || "Failed to create job" 
+      }
     }
 
-    cookies().set("token", data.token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-    })
+    if (data.token) {
+      cookies().set("token", data.token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+      })
+    }
+    
+    return { 
+      success: true, 
+      jobId: data.job?.id || null,
+      message: "Job created successfully" 
+    }
   } catch (error) {
     console.error("error", error)
-    return { error: "An unexpected error occurred" }
+    return { 
+      success: false, 
+      error: "An unexpected error occurred" 
+    }
   }
 }

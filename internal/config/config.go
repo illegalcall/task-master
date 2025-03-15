@@ -1,9 +1,12 @@
 package config
 
 import (
+	"log"
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 type Config struct {
@@ -55,6 +58,14 @@ type StorageConfig struct {
 }
 
 func LoadConfig() *Config {
+	// Load .env file
+	if err := godotenv.Load(); err != nil {
+		log.Printf("Warning: Error loading .env file: %v", err)
+		// Continue execution with fallback values
+	} else {
+		log.Println("Successfully loaded .env file")
+	}
+
 	return &Config{
 		Server: ServerConfig{
 			Port:            loadEnv("PORT", ":8080"),
@@ -65,7 +76,7 @@ func LoadConfig() *Config {
 			Environment:     loadEnv("GO_ENV", "development"),
 		},
 		Database: DatabaseConfig{
-			URL: loadEnv("DATABASE_URL", "postgres://admin:admin@localhost:5432/taskmaster?sslmode=disable"),
+			URL: loadEnv("DATABASE_URL", "xyz"),
 		},
 		Kafka: KafkaConfig{
 			Broker:         loadEnv("KAFKA_BROKER", "localhost:9092"),
@@ -86,16 +97,21 @@ func LoadConfig() *Config {
 		},
 		Storage: StorageConfig{
 			TempDir: loadEnv("STORAGE_TEMP_DIR", "/tmp/taskmaster"),
-			MaxSize: loadEnvAsInt64("STORAGE_MAX_SIZE", 10485760), // 10MB
+			MaxSize: loadEnvAsInt64("STORAGE_MAX_SIZE", 10485760),                    // 10MB
 			TTL:     time.Duration(loadEnvAsInt("STORAGE_TTL", 86400)) * time.Second, // 24h
 		},
 	}
 }
 
 func loadEnv(key, defaultVal string) string {
+	log.Printf("Loading environment variable: %s", key)
+
 	if value, exists := os.LookupEnv(key); exists {
+		log.Printf("Found %s in environment with value: %s", key, value)
 		return value
 	}
+
+	log.Printf("Environment variable %s not found, using default value: %s", key, defaultVal)
 	return defaultVal
 }
 
