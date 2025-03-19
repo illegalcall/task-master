@@ -1,6 +1,7 @@
 "use server"
 
 import { cookies } from "next/headers"
+import { redirect } from "next/navigation"
 import { supabase } from '@/lib/supabase'
 
 export async function signUpUser({
@@ -62,4 +63,30 @@ export async function signUpUser({
     console.error("Unexpected error during sign up:", error.message)
     return { error: "An unexpected error occurred during sign up" }
   }
+}
+
+// Handle Google OAuth login
+export async function signInWithGoogle() {
+  const origin = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_VERCEL_URL || "http://localhost:3000"
+  const redirectUrl = `${origin}/auth/callback`
+  
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: redirectUrl,
+      queryParams: {
+        // Optional custom OAuth scopes
+        access_type: 'offline',
+        prompt: 'consent',
+      },
+    },
+  })
+
+  if (error) {
+    console.error("Error with Google sign in:", error.message)
+    return { error: error.message }
+  }
+
+  // Return the URL that the client should redirect to
+  return { url: data.url }
 } 

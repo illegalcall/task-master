@@ -28,12 +28,14 @@ export const verifyToken = async (token: string) => {
 }
 
 export async function middleware(request: NextRequest) {
-  // Allow access to login page and API routes
-  if (request.nextUrl.pathname.startsWith("/api/")) {
+  // Allow access to login page, sign-up page, API routes, and auth callback
+  if (request.nextUrl.pathname.startsWith("/api/") || 
+      request.nextUrl.pathname.startsWith("/auth/")) {
     return NextResponse.next()
   }
 
-  if (request.nextUrl.pathname === "/login") {
+  // Public routes that don't require authentication
+  if (request.nextUrl.pathname === "/login" || request.nextUrl.pathname === "/sign-up") {
     const token = request.cookies.get("token")
     if (token) {
       try {
@@ -42,8 +44,8 @@ export async function middleware(request: NextRequest) {
           return NextResponse.redirect(new URL("/", request.url))
         }
       } catch (error) {
-        console.error("Error verifying token on login page:", error)
-        // Continue to login page if verification fails
+        console.error("Error verifying token on public page:", error)
+        // Continue to public page if verification fails
       }
     }
     return NextResponse.next()
