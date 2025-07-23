@@ -28,8 +28,22 @@ export function JobForm() {
     try {
       const jobName = formData.get("job_name") as string
       const expectedSchema = formData.get("expected_schema") as string
-      const source = activeTab === "upload" ? pdfBase64 : pdfSource
       const description = formData.get("description") as string
+      
+      // Determine the source based on the active tab
+      const source = activeTab === "upload" ? pdfBase64 : pdfSource
+      
+      if (!source) {
+        toast({
+          title: "Error",
+          description: "Please provide a PDF source (upload or URL)",
+          variant: "destructive",
+        })
+        setIsSubmitting(false)
+        return
+      }
+      
+      console.log(`Using ${activeTab} method with source length: ${source.length}`);
       
       const result = await createJob({
         jobName,
@@ -55,6 +69,7 @@ export function JobForm() {
         setIsSubmitting(false)
       }
     } catch (error) {
+      console.error("Error creating job:", error)
       toast({
         title: "Error",
         description: "An unexpected error occurred",
@@ -62,6 +77,11 @@ export function JobForm() {
       })
       setIsSubmitting(false)
     }
+  }
+
+  const handleFileSelect = (base64: string) => {
+    console.log("File selected, base64 length:", base64.length)
+    setPdfBase64(base64)
   }
 
   return (
@@ -96,8 +116,13 @@ export function JobForm() {
               <TabsTrigger value="url">URL / Base64</TabsTrigger>
             </TabsList>
             <TabsContent value="upload">
-              <FileDropzone onFileSelect={setPdfBase64} />
-              <p className="text-sm text-muted-foreground">
+              <FileDropzone onFileSelect={handleFileSelect} />
+              {pdfBase64 && (
+                <p className="text-sm text-green-600 mt-2">
+                  PDF file loaded successfully ({Math.round(pdfBase64.length / 1024)} KB)
+                </p>
+              )}
+              <p className="text-sm text-muted-foreground mt-2">
                 Upload a PDF file to process. The file will be converted to
                 base64 for processing.
               </p>
